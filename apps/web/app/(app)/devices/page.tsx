@@ -108,7 +108,7 @@ export default function DevicesPage() {
         )}
       </Panel>
       {msg && <p role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "" : "text-crit"}`}>{msg.text}</p>}
-      <Dialog open={!!created} onClose={() => setCreated(null)} title="Token de matrícula criado">
+      <Dialog open={!!created} onClose={() => setCreated(null)} title="Token de matrícula criado" confirmClose="O token aparece só desta vez. Você já copiou? Fechar mesmo?">
         {created && (
           <div className="space-y-3 text-sm">
             <p>Copie agora: <strong>esta é a única vez</strong> que o token aparece. Ele só serve para matricular máquinas; cada máquina recebe uma chave própria.</p>

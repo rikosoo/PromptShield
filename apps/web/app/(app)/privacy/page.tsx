@@ -141,7 +141,7 @@ export default function PrivacyPage() {
         )}
       </Panel>
       {msg && <p role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "" : "text-crit"}`}>{msg.text}</p>}
-      <Dialog open={!!newKey} onClose={() => setNewKey(null)} title="Chave de API criada">
+      <Dialog open={!!newKey} onClose={() => setNewKey(null)} title="Chave de API criada" confirmClose="A chave aparece só desta vez. Você já copiou? Fechar mesmo?">
         {newKey && <div className="space-y-3 text-sm"><p>Copie agora: <strong>esta é a única vez</strong> que a chave aparece.</p><code className="block break-all rounded border border-line bg-panel2 p-2 font-mono text-xs" data-testid="new-key">{newKey.key}</code><div className="flex justify-end"><button type="button" className="btn-primary" onClick={() => setNewKey(null)}>Já guardei</button></div></div>}
       </Dialog>
     </div>
