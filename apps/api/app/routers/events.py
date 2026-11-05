@@ -8,8 +8,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import PlainTextResponse
+from promptshield_detection.scoring import severity_for
 from sqlalchemy import Text, func, select
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import cast
 
 from app import audit, crypto
@@ -20,7 +22,7 @@ from app.routers.analytics import window_start
 from app.routers.feedback import feedback_for, view
 from app.schemas import EventIn, EventResult, JustificationIn, OriginalRequest
 from app.security import READ_ROLES, Principal, require_ingest, require_roles
-from app.services import ingest
+from app.services import ingest, v2_view
 
 router = APIRouter(prefix="/v1/events", tags=["eventos"])
 
@@ -43,6 +45,8 @@ def event_filters(
     search: str | None = Query(None, alias="q", min_length=2, max_length=100, description="busca no texto JÁ mascarado (nunca no original)"),
     sensor: Annotated[uuid.UUID | None, Query(description="id do sensor (dispositivo): só os eventos enviados pela chave dele")] = None,
     has_attachment: bool | None = Query(None, description="o prompt veio com arquivo anexado"),
+    severity: str | None = Query(None, pattern="^(baixo|medio|alto|critico)$", description="faixa do score: baixo 0-24, medio 25-49, alto 50-69, critico 70-100"),
+    alert_status: str | None = Query(None, pattern="^(sem_alerta|novo|em_analise|falso_positivo|resolvido)$", description="situação do alerta (incidente) do prompt"),
     review: str | None = Query(None, pattern="^(pending|reviewed|correta|falso_positivo|faltou)$", description="revisão humana da análise"),
     span_type: str | None = Query(None, max_length=40, description="tipo de trecho sensível detectado (ex.: aws_access_key, cpf)"),
     intent: str | None = Query(None, max_length=40, description="o que a pessoa pediu (ex.: resumir, declara_confidencial)"),
@@ -86,6 +90,17 @@ def apply_filters(q, f: dict):
         q = q.where((Analysis.decision == "block") | (Analysis.would_decide == "block"))
     if f["decision"]:
         q = q.where((Analysis.decision == f["decision"]) | (Analysis.would_decide == f["decision"]))
+    if f["severity"]:
+        lo, hi = SEVERITY_RANGE[f["severity"]]
+        q = q.where(Analysis.risk_score >= lo, Analysis.risk_score <= hi)
+    if f["alert_status"]:
+        if f["alert_status"] == "sem_alerta":
+            inc = aliased(Incident)
+            q = q.where(~select(inc.id).where(inc.event_pk == Event.id).exists())
+        else:
+            wanted = next(k for k, v in ALERT_STATUS.items() if v == f["alert_status"])
+            inc = aliased(Incident)
+            q = q.where(select(inc.id).where(inc.event_pk == Event.id, inc.status == wanted).exists())
     if f["kind"]:
         q = q.where(Event.kind == f["kind"])
     if f["session_id"]:
@@ -119,14 +134,14 @@ def list_events(
     limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
 ) -> list[dict]:
     with tenant_session(p.tenant_id) as s:
-        q = apply_filters(select(Event, Analysis, Incident.id).join(Analysis, Analysis.event_pk == Event.id)
+        q = apply_filters(select(Event, Analysis, Incident.id, Incident.status).join(Analysis, Analysis.event_pk == Event.id)
                           .outerjoin(Incident, Incident.event_pk == Event.id), f)
         total = s.execute(select(func.count()).select_from(q.subquery())).scalar_one()
         order = (Analysis.risk_score.desc(), Event.occurred_at.desc()) if sort == "risk" else (Event.occurred_at.desc(), Event.id.desc())
         rows = s.execute(q.order_by(*order).limit(limit).offset(offset)).all()
         response.headers["X-Total-Count"] = str(total)
-        fbs = feedback_for(s, [e.id for e, _, _ in rows])
-        return [_view(e, a, i, fbs.get(e.id)) for e, a, i in rows]
+        fbs = feedback_for(s, [e.id for e, _, _, _ in rows])
+        return [_view(e, a, i, fbs.get(e.id), st) for e, a, i, st in rows]
 
 
 @router.get("/export.csv", response_class=PlainTextResponse, summary="Exporta em CSV (texto mascarado) com os mesmos filtros; a exportação é auditada")
@@ -155,11 +170,14 @@ def export_csv(
 @router.get("/{event_id}", summary="Detalhe de um evento (texto mascarado)")
 def get_event(event_id: uuid.UUID, p: Annotated[Principal, Depends(require_roles(*READ_ROLES))]) -> dict:
     with tenant_session(p.tenant_id) as s:
-        row = s.execute(select(Event, Analysis, Incident.id).join(Analysis, Analysis.event_pk == Event.id)
+        row = s.execute(select(Event, Analysis, Incident.id, Incident.status).join(Analysis, Analysis.event_pk == Event.id)
                         .outerjoin(Incident, Incident.event_pk == Event.id).where(Event.event_id == event_id)).first()
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "evento não encontrado")
-        return _view(*row, feedback_for(s, [row[0].id]).get(row[0].id))
+        e, a, inc, inc_status = row
+        out = _view(e, a, inc, feedback_for(s, [e.id]).get(e.id), inc_status)
+        out["analysis_v2"] = v2_view(a, e.masked_text)        # só no detalhe: o resultado padronizado completo (achados, impacto, recomendação)
+        return out
 
 
 @router.post("/{event_id}/justification", status_code=204,
@@ -186,11 +204,18 @@ def read_original(event_id: uuid.UUID, body: OriginalRequest,
         return {"event_id": str(event_id), "text": crypto.decrypt_original(p.tenant_id, ev.original_ciphertext)}
 
 
-def _view(e: Event, a: Analysis, incident_id: uuid.UUID | None = None, fb: EventFeedback | None = None) -> dict:
+SEVERITY_RANGE = {"baixo": (0, 24), "medio": (25, 49), "alto": (50, 69), "critico": (70, 100)}
+ALERT_STATUS = {"aberto": "novo", "em analise": "em_analise", "falso positivo": "falso_positivo", "resolvido": "resolvido"}
+
+
+def _view(e: Event, a: Analysis, incident_id: uuid.UUID | None = None, fb: EventFeedback | None = None, incident_status: str | None = None) -> dict:
     return {"event_id": str(e.event_id), "occurred_at": e.occurred_at.isoformat(), "app": e.app, "channel": e.channel,
             "user_id": e.user_id, "department": e.department, "kind": e.kind, "personal_account": e.personal_account,
             "masked_text": e.masked_text, "attachments": e.attachments or [], "has_original": e.original_ciphertext is not None, "tool_name": e.tool_name,
             "session_id": e.session_id, "spans": [{"type": sp.get("type"), "masked": sp.get("masked")} for sp in (a.spans or [])],
             "categories": a.categories, "flags": a.flags, "risk_score": a.risk_score, "reasons": a.reasons,
             "decision": a.decision, "would_decide": a.would_decide, "policy_hits": a.policy_hits,
-            "incident_id": str(incident_id) if incident_id else None, "feedback": view(fb)}
+            "incident_id": str(incident_id) if incident_id else None, "feedback": view(fb),
+            # monitoramento passivo: severidade pelas faixas 0-24 baixo, 25-49 medio, 50-69 alto, 70-100 critico; status do alerta no lugar da "decisão"
+            "severity": severity_for(a.risk_score), "alert_status": ALERT_STATUS.get(incident_status or "", "sem_alerta"),
+            "findings": a.findings or [], "engine_version": a.engine_version}

@@ -76,7 +76,7 @@ export default function ExceptionsPage() {
         {rows.loading && !rows.data && <Loading />}
         {rows.data && rows.data.length === 0 && <Empty>Nenhuma exceção{onlyActive ? " vigente" : ""}.</Empty>}
         {rows.data && rows.data.length > 0 && (
-          <div className="overflow-x-auto"><table className="w-full text-sm" data-testid="exceptions-table">
+          <div className="relative overflow-x-auto"><table className="w-full text-sm" data-testid="exceptions-table">
             <thead><tr className="text-left text-xs text-muted"><th className="py-1">Política</th><th>Para</th><th>Motivo</th><th>Vence</th><th>Situação</th><th /></tr></thead>
             <tbody>
               {rows.data.map((x) => (

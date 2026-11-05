@@ -3,12 +3,11 @@
  * (Enter ou clique em enviar); nunca tecla por tecla, nunca em outros sites.
  */
 import { createTracker, infoOf } from "./attachments";
-import { failurePlan, planFor, type Plan } from "./decision";
-import { readText, writeText } from "./editor";
+import { readText } from "./editor";
 import { siteFor } from "./sites";
 import type { SiteModule } from "./sites/types";
 import { hostMatches } from "./config";
-import { setIndicator, showIndicator, showPlan, uiHost } from "./ui";
+import { setIndicator, showIndicator, uiHost } from "./ui";
 import { INSPECTION_STOPPED, type ApiResult, type PublicConfig, type Request, type Response } from "./types";
 
 function send<T>(msg: Request): Promise<Response<T>> {
@@ -24,16 +23,15 @@ function send<T>(msg: Request): Promise<Response<T>> {
 }
 
 const HEALTH_MS = __DEV__ ? 400 : 5000;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function start(): Promise<void> {
   const site = siteFor(location.hostname);
   if (!site) return; // site sem módulo: a extensão não faz nada
 
   // Os ouvintes entram já; a configuração pode demorar alguns segundos na primeira leitura da política gerenciada.
-  // Enquanto não se sabe se o domínio é monitorado, um envio fica retido até a resposta (nunca passa sem decisão).
+  // Enquanto não se sabe se o domínio é monitorado, o texto é lido mas só vai à API depois da configuração (o envio do usuário nunca espera).
   let active: boolean | null = null;
-  let cfg: PublicConfig = { configured: false, domains: [], failMode: "open" };
+  let cfg: PublicConfig = { configured: false, domains: [], failMode: "open" };   // failMode existe na configuração, mas o produto é passivo: nunca bloqueia
   const ready = send<PublicConfig>({ type: "getPublicConfig" }).then((res) => {
     active = res.ok && hostMatches(location.hostname, res.data.domains);
     if (res.ok) cfg = res.data;
@@ -44,74 +42,40 @@ async function start(): Promise<void> {
     }
   });
 
-  let bypass = false;
-  let busy = false;
+  // PASSIVO: a extensão só OBSERVA. Lê o texto no instante do envio (Enter ou clique), antes do site limpar o campo, e DEIXA O ENVIO SEGUIR
+  // na hora: nada de preventDefault, nada de segurar o prompt até a API responder, nada de diálogo, nada de alterar o texto. A análise vai em
+  // segundo plano; se a API estiver fora do ar, o prompt do usuário não é afetado (só deixa de ser registrado, e o indicador avisa).
   const files = createTracker();
+  let last = { text: "", at: 0 };
 
-  async function submit(): Promise<void> {
-    bypass = true;
-    try {
-      const deadline = Date.now() + 1500;
-      let btn = site!.findSend(document);
-      while (btn && (btn as HTMLButtonElement).disabled && Date.now() < deadline) {
-        await sleep(50);
-        btn = site!.findSend(document);
-      }
-      if (btn) btn.click();
-      else site!.findInput(document)?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-      await sleep(0);
-    } finally {
-      setTimeout(() => (bypass = false), 300);
-    }
+  function observe(input: HTMLElement | null): void {
+    if (!input || active === false) return;
+    const text = readText(input);
+    const list = files.list();
+    if (!text.trim() && !list.length) return;               // só arquivo, sem texto, também é registrado
+    const now = Date.now();
+    if (text === last.text && now - last.at < 2000) return;   // Enter e clique no mesmo envio contam uma vez só
+    last = { text, at: now };
+    files.clear();
+    void report(text, list);
   }
 
-  async function guard(input: HTMLElement): Promise<void> {
-    busy = true;
+  async function report(text: string, list: ReturnType<typeof files.list>): Promise<void> {
     try {
-      const text = readText(input);
-      await ready;
-      if (!active) {            // domínio não monitorado: libera o envio retido sem enviar nada à API
-        await submit();
-        return;
-      }
+      await ready;                                            // só a configuração; o envio do usuário já seguiu
+      if (!active) return;
       setIndicator("inspecting");
-      const res = await send<ApiResult>({ type: "analyze", app: site!.app, text, sessionPath: location.pathname, files: files.list() });
-      let plan: Plan;
-      let result: ApiResult | null = null;
+      const res = await send<ApiResult>({ type: "analyze", app: site!.app, text, sessionPath: location.pathname, files: list });
       if (res.ok) {
-        result = res.data;
-        plan = planFor(result);
         setIndicator("active");
+      } else if (res.error === INSPECTION_STOPPED) {          // licença/contrato parou a inspeção: avisa, nunca interfere no trabalho
+        setIndicator("warning", "PromptShield: a inspeção está PARADA pela licença ou contrato da empresa; este envio não foi inspecionado. Fale com o administrador.");
       } else {
-        const stopped = res.error === INSPECTION_STOPPED;       // licença/contrato parou a inspeção: nunca bloqueia o trabalho, mesmo em modo fechado
-        plan = failurePlan(stopped ? "open" : cfg.failMode);
-        setIndicator("warning", stopped ? "PromptShield: a inspeção está PARADA pela licença ou contrato da empresa; este envio não foi inspecionado. Fale com o administrador."
-          : cfg.failMode === "closed" ? "PromptShield: não foi possível verificar; envios bloqueados." : "PromptShield: sem conexão; enviado sem inspeção.");
+        setIndicator("warning", "PromptShield: sem conexão com o servidor; este envio não foi registrado. O seu envio não foi afetado.");
       }
-      const out = await showPlan(plan, "Não foi possível verificar este prompt com a política da empresa. O envio foi bloqueado.");
-      if (out.action === "cancel") return;
-      if (out.action === "send_masked" && result) writeText(input, result.masked_text);
-      if (out.action === "justify" && result) {
-        const j = await send<null>({ type: "justify", eventId: result.event_id, justification: out.text });
-        if (!j.ok) {
-          setIndicator("warning", "PromptShield: não foi possível registrar a justificativa; envio cancelado.");
-          return;
-        }
-      }
-      await submit();
-      files.clear();
-    } finally {
-      busy = false;
+    } catch {
+      /* a observação nunca pode afetar a página */
     }
-  }
-
-  function intercept(e: Event, input: HTMLElement | null): void {
-    if (bypass || !input || active === false) return;
-    if (!readText(input).trim() && !files.list().length) return;   // só arquivo, sem texto, também é inspecionado
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    if (busy) return;
-    void guard(input);
   }
 
   // anexos: só registra nome/tamanho/tipo; não impede nem altera o anexo. Sem exigir isTrusted: o seletor de arquivos do
@@ -126,18 +90,18 @@ async function start(): Promise<void> {
   window.addEventListener("keydown", (e) => {
     if (e.target === uiHost() || !e.isTrusted) return;
     const input = site.findInput(document);
-    if (input && input.contains(e.target as Node) && site.isSubmitKey(e)) intercept(e, input);
+    if (input && input.contains(e.target as Node) && site.isSubmitKey(e)) observe(input);
   }, true);
 
   window.addEventListener("click", (e) => {
     if (!e.isTrusted) return; // cliques sintéticos (do próprio envio liberado) passam
     const btn = site.findSend(document);
-    if (btn && e.target instanceof Node && btn.contains(e.target)) intercept(e, site.findInput(document));
+    if (btn && e.target instanceof Node && btn.contains(e.target)) observe(site.findInput(document));
   }, true);
 
   window.addEventListener("submit", (e) => {
     const input = site.findInput(document);
-    if (e.target instanceof HTMLFormElement && input && e.target.contains(input)) intercept(e, input);
+    if (e.target instanceof HTMLFormElement && input && e.target.contains(input)) observe(input);
   }, true);
 }
 

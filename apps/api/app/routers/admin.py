@@ -5,10 +5,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from promptshield_detection.taxonomy import load as load_taxonomy
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app import audit
+from app.config import settings
 from app.db import tenant_session
 from app.models import ApiKey, AuditLog, Tenant, User
 from app.schemas import ApiKeyIn, ApiKeyRotate, TenantPatch, UserIn
@@ -162,7 +165,9 @@ def contract_view(t: Tenant, now: datetime | None = None) -> dict:
 def _tenant_view(t: Tenant) -> dict:
     return {"id": str(t.id), "name": t.name, "failure_mode": t.failure_mode, "retention_days": t.retention_days, "original_retention_days": t.original_retention_days, "omit_text_categories": list(t.omit_text_categories),
             "store_original": t.store_original, "policy_url": t.policy_url, "monitored_domains": t.monitored_domains,
-            "is_demo": t.is_demo, "volume_threshold_per_hour": t.volume_threshold_per_hour, "contract": contract_view(t)}
+            "is_demo": t.is_demo, "volume_threshold_per_hour": t.volume_threshold_per_hour, "contract": contract_view(t),
+            # o produto é PASSIVO: observa, analisa, registra e alerta; nunca bloqueia, altera ou interrompe um prompt
+            "monitoring_mode": "passive" if settings.passive_only else "legacy_enforcement"}
 
 
 @router.get("/tenant", summary="Configurações do tenant")
@@ -183,15 +188,52 @@ def patch_tenant(body: TenantPatch, p: Annotated[Principal, Depends(require_role
         return _tenant_view(t)
 
 
+class RiskWeightsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    weights: dict[str, int] = Field(max_length=40)
+
+
+def _weights_view(t: Tenant) -> dict:
+    cats = load_taxonomy()
+    custom = {k: v for k, v in (t.risk_weights or {}).items() if k in cats}
+    return {"defaults": {k: c.weight for k, c in cats.items()}, "custom": custom, "effective": {k: custom.get(k, c.weight) for k, c in cats.items()},
+            "note": "Peso de 0 a 100 por categoria, definido pela empresa. Uma credencial de alta confiança continua valendo pelo menos 70 (piso crítico), "
+                    "qualquer que seja o peso: um indicador crítico nunca é ignorado."}
+
+
+@router.get("/risk-weights", summary="Pesos de risco por categoria (padrão da taxonomia e os da empresa)")
+def get_risk_weights(p: Annotated[Principal, Depends(require_roles("admin", "analista", "auditor", "leitura"))]) -> dict:
+    with tenant_session(p.tenant_id) as s:
+        return _weights_view(s.get(Tenant, p.tenant_id))
+
+
+@router.put("/risk-weights", summary="Define os pesos de risco da empresa (substitui os anteriores; vale para os próximos eventos; auditado)")
+def put_risk_weights(body: RiskWeightsIn, p: Annotated[Principal, Depends(require_roles("admin"))]) -> dict:
+    cats = load_taxonomy()
+    bad = sorted(k for k in body.weights if k not in cats)
+    if bad:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"categoria desconhecida: {', '.join(bad)}")
+    out_of_range = sorted(k for k, v in body.weights.items() if not 0 <= v <= 100)
+    if out_of_range:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"o peso vai de 0 a 100 (fora da faixa: {', '.join(out_of_range)})")
+    with tenant_session(p.tenant_id) as s:
+        t = s.get(Tenant, p.tenant_id)
+        before = dict(t.risk_weights or {})
+        t.risk_weights = {k: v for k, v in body.weights.items() if v != cats[k].weight}     # só guarda o que difere do padrão
+        s.flush()
+        audit.write(s, p, "risk_weights.update", "tenant", str(p.tenant_id), {"before": before, "after": t.risk_weights})
+        return _weights_view(t)
+
+
 @router.get("/hook-config", summary="Configuração mínima para coletores (modo de falha)")
 def hook_config(p: Annotated[Principal, Depends(require_ingest)]) -> dict:
     with tenant_session(p.tenant_id) as s:
         t = s.get(Tenant, p.tenant_id)
-        return {"failure_mode": t.failure_mode}
+        return {"failure_mode": "open" if settings.passive_only else t.failure_mode}     # passivo: falha do analisador nunca interrompe a ferramenta de IA
 
 
 @router.get("/extension-config", summary="Configuração para a extensão de navegador (domínios, política, modo de falha)")
 def extension_config(p: Annotated[Principal, Depends(require_ingest)]) -> dict:
     with tenant_session(p.tenant_id) as s:
         t = s.get(Tenant, p.tenant_id)
-        return {"failure_mode": t.failure_mode, "domains": list(t.monitored_domains), "policy_url": t.policy_url}
+        return {"failure_mode": "open" if settings.passive_only else t.failure_mode, "domains": list(t.monitored_domains), "policy_url": t.policy_url}

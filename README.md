@@ -53,6 +53,10 @@ O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuário
 | Dispositivos | tokens de matrícula, cobertura por ferramenta, licença, revogação |
 | Políticas, Privacidade e segurança, Piloto, Inference hooks | políticas em modo monitorar ou aplicar, retenção, mapa de dados, piloto de 30 dias |
 
+## Monitoramento passivo e motor 2.0
+
+O PromptShield **só observa, analisa, registra e alerta**: nunca bloqueia, altera ou interrompe um prompt (servidor, sensores e extensão). A análise reconhece dados sensíveis declarados em linguagem natural (pt, en, es), correlaciona indicadores e devolve um resultado padronizado com severidade 0–24 baixo, 25–49 moderado, 50–69 alto e 70–100 crítico. Diagnóstico, arquitetura, medições antes/depois e limites: [`docs/motor-2.0.md`](docs/motor-2.0.md).
+
 ## O que ele detecta (e o que não)
 
 30 categorias em [`packages/taxonomy`](packages/taxonomy): dados sensíveis (CPF, CNPJ, RG, cartão, chaves, senhas...), código e engenharia, ataques à IA (injection, jailbreak, extração de system prompt), ações de agente (comandos destrutivos, leitura de credenciais, rede externa...) e negócio. **Arquivos anexados:** só nome, tamanho e tipo (nunca o conteúdo); o nome gera risco (`.env`, `folha_pagamento`...).

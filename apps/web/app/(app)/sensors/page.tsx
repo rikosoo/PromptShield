@@ -132,7 +132,7 @@ export default function SensorsPage() {
           </form>
           <Panel title={`Sensores (${rows.length} de ${all.length})`}>
             {rows.length === 0 ? <Empty>{all.length === 0 ? "Nenhum sensor instalado ainda. Crie um token em Dispositivos e rode a linha de instalação." : "Nenhum sensor com esses filtros."}</Empty> : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full min-w-[64rem] border-collapse" data-testid="sensors-table">
                   <caption className="sr-only">Sensores instalados, com as IAs habilitadas em cada um</caption>
                   <thead><tr>
@@ -179,7 +179,7 @@ export default function SensorsPage() {
             <div>
               <h3 className="mb-1 text-xs font-semibold uppercase text-muted">IAs habilitadas nesta máquina</h3>
               {(selected.ias ?? []).length === 0 ? <p className="text-xs text-muted">O sensor não informou as IAs. Rode o assistente de configuração do sensor (<code>setup</code>) e escolha as IAs, ou reinstale com <code>--ias</code>.</p> : (
-                <div className="overflow-x-auto"><table className="w-full min-w-[34rem] border-collapse" data-testid="ia-detail">
+                <div className="relative overflow-x-auto"><table className="w-full min-w-[34rem] border-collapse" data-testid="ia-detail">
                   <caption className="sr-only">IAs habilitadas e eventos recebidos</caption>
                   <thead><tr><th scope="col" className="th">IA</th><th scope="col" className="th">Como é monitorada</th><th scope="col" className="th">Situação</th><th scope="col" className="th">Eventos 7 dias</th><th scope="col" className="th">Eventos 30 dias</th><th scope="col" className="th">Último evento</th></tr></thead>
                   <tbody>{(selected.ias ?? []).map((id) => {

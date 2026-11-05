@@ -51,7 +51,7 @@ def summary(s: Session, tenant_id: uuid.UUID, now: datetime | None = None) -> di
     coverage = {"active_users": users, "expected_users": expected,
                 "rate": round(users / expected, 4) if expected else None, "by_department": by_dept, "by_channel": by_channel}
 
-    totals = dict(s.execute(text("""SELECT count(*) AS events, count(*) FILTER (WHERE a.risk_score >= 60) AS high_risk,
+    totals = dict(s.execute(text("""SELECT count(*) AS events, count(*) FILTER (WHERE a.risk_score >= 50) AS high_risk,
                                     count(*) FILTER (WHERE a.decision <> 'allow') AS enforced_decisions,
                                     count(*) FILTER (WHERE a.would_decide <> 'allow') AS would_act
                                     FROM events e JOIN analyses a ON a.event_pk = e.id WHERE e.received_at >= :since"""), prm).mappings().one())

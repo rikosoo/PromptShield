@@ -62,6 +62,14 @@ def _configure(request):
     app_url = request.getfixturevalue("app_url")
     settings.database_url = app_url
     settings.oidc_mode = "mock"
+    # O produto é PASSIVO (settings.passive_only = True por padrão). A maior parte desta suíte exercita o código LEGADO de aplicação de políticas
+    # (decisão block/mask devolvida ao coletor), por isso desliga o modo passivo; os testes marcados com @pytest.mark.passive rodam com o padrão real.
+    settings.passive_only = "passive" in request.keywords
+    mp = request.getfixturevalue("monkeypatch")                      # o sensor (subprocesso) segue o mesmo padrão: legado nos testes antigos
+    if "passive" in request.keywords:
+        mp.delenv("PROMPTSHIELD_ENFORCEMENT", raising=False)
+    else:
+        mp.setenv("PROMPTSHIELD_ENFORCEMENT", "1")
     settings.oidc_mock_secret = "x" * 40
     settings.original_text_master_key = base64.urlsafe_b64encode(b"k" * 32).decode()
     appdb.reset_engine()
@@ -71,6 +79,7 @@ def _configure(request):
     with admin_engine.begin() as c:
         c.execute(text("TRUNCATE tenants CASCADE"))
     yield
+    settings.passive_only = True
     appdb.reset_engine()
 
 

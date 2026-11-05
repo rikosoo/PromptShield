@@ -45,32 +45,45 @@ test("o aviso pode ser minimizado (continua visível como ponto) e expandido de 
   await expect(pill).toBeVisible();
 });
 
-test("CPF sintético: pede confirmação e envia a versão mascarada", async () => {
-  api.mode = "mask";
+for (const mode of ["mask", "block", "ask_justification", "alert"] as const) {
+  test(`PASSIVO: mesmo que a API devolva "${mode}", o envio segue na hora, com o texto ORIGINAL, sem diálogo nem bloqueio`, async () => {
+    api.mode = mode;
+    const page = await open();
+    await typeAndSubmit(page, PROMPT);
+    await expect.poll(() => sent(page), { timeout: 1500 }).toEqual([PROMPT]);        // o site recebeu o prompt intacto (nada mascarado, nada retido)
+    await expect(ui(page).locator('[role="dialog"]')).toHaveCount(0);                 // nenhuma janela, nenhuma pergunta ao usuário
+    await expect.poll(() => api.events.length).toBe(1);                              // e ainda assim o evento foi registrado, em segundo plano
+    expect(api.events[0].body).toMatchObject({ kind: "prompt", source: { channel: "browser", app: "chatgpt_web", integration_status: "partial" },
+      actor: { user_id: "rafael.moreira", department: "Engenharia" }, content: { text: PROMPT }, context: { personal_account: false } });
+    expect(JSON.stringify(await sent(page))).toContain(CPF);                         // o PromptShield NÃO altera o prompt enviado à ferramenta de IA
+  });
+}
+
+test("PASSIVO: API lenta não atrasa o envio do usuário", async () => {
+  api.mode = "allow";
+  api.delayMs = 3000;
   const page = await open();
+  const t0 = Date.now();
   await typeAndSubmit(page, PROMPT);
-  const dlg = ui(page).locator('[role="dialog"]');
-  await expect(dlg).toContainText("dados pessoais");
-  await expect(dlg.locator("pre")).toHaveText(MASKED);
-  expect(await sent(page)).toEqual([]);                       // nada foi enviado antes da confirmação
-  await dlg.getByRole("button", { name: "Enviar versão mascarada" }).click();
-  await expect.poll(() => sent(page)).toEqual([MASKED]);      // o site só recebeu o texto mascarado
-  expect(JSON.stringify(await sent(page))).not.toContain(CPF);
-  expect(api.events).toHaveLength(1);
-  const ev = api.events[0].body;
-  expect(ev).toMatchObject({ kind: "prompt", source: { channel: "browser", app: "chatgpt_web", integration_status: "partial" },
-    actor: { user_id: "rafael.moreira", department: "Engenharia" }, content: { text: PROMPT }, context: { personal_account: false } });
+  await expect.poll(() => sent(page), { timeout: 1000 }).toEqual([PROMPT]);
+  expect(Date.now() - t0).toBeLessThan(1500);                                        // o envio não esperou os 3 s da análise
+  expect(api.events).toHaveLength(0);                                                // a análise ainda está em andamento em segundo plano
+  await expect.poll(() => api.events.length, { timeout: 6000 }).toBe(1);
 });
 
-test("bloqueio por política: nada é enviado e o texto fica no campo", async () => {
-  api.mode = "block";
+test("PASSIVO: os eventos de teclado e de clique do envio continuam chegando ao site (a extensão não para a propagação)", async () => {
   const page = await open();
-  await typeAndSubmit(page, PROMPT);
-  const dlg = ui(page).locator('[role="dialog"]');
-  await expect(dlg).toContainText("Envio bloqueado");
-  await dlg.getByRole("button", { name: "Entendi" }).click();
-  expect(await sent(page)).toEqual([]);
-  await expect(page.locator("#prompt")).toContainText("Cliente");
+  await page.evaluate(() => {
+    const w = window as any;
+    w.__seen = [];
+    for (const type of ["keydown", "click"]) document.addEventListener(type, () => w.__seen.push(type), false);   // ouvinte em bolha: não roda se alguém parar a propagação
+  });
+  await typeAndSubmit(page, "sem dados sensíveis", "enter");
+  await typeAndSubmit(page, "outro", "click");
+  await expect.poll(() => sent(page)).toEqual(["sem dados sensíveis", "outro"]);
+  const seen = await page.evaluate(() => (window as any).__seen as string[]);
+  expect(seen.filter((x) => x === "keydown").length).toBeGreaterThanOrEqual(1);
+  expect(seen.filter((x) => x === "click").length).toBeGreaterThanOrEqual(1);
 });
 
 test("política em monitorar (allow): envia o original sem diálogo, por Enter e por clique", async () => {
@@ -81,47 +94,16 @@ test("política em monitorar (allow): envia o original sem diálogo, por Enter e
   await typeAndSubmit(page, "outro prompt sem dados", "click");
   await expect.poll(() => sent(page)).toEqual([PROMPT, "outro prompt sem dados"]);
   await expect(ui(page).locator('[role="dialog"]')).toHaveCount(0);
-  expect(api.events).toHaveLength(2);
+  await expect.poll(() => api.events.length).toBe(2);      // o registro é em segundo plano
 });
 
-test("pedir justificativa: exige 10 caracteres, registra e envia o original", async () => {
-  api.mode = "ask_justification";
-  const page = await open();
-  await typeAndSubmit(page, PROMPT);
-  const dlg = ui(page).locator('[role="dialog"]');
-  const ok = dlg.getByRole("button", { name: "Enviar com justificativa" });
-  await expect(ok).toBeDisabled();
-  await dlg.getByLabel("Justificativa").fill("curto");
-  await expect(ok).toBeDisabled();
-  await dlg.getByLabel("Justificativa").fill("preciso enviar ao cliente hoje");
-  await ok.click();
-  await expect.poll(() => sent(page)).toEqual([PROMPT]);
-  const j = api.requests.find((r) => r.path.endsWith("/justification"));
-  expect(j?.body).toEqual({ justification: "preciso enviar ao cliente hoje" });
-});
-
-test("aviso antes do envio (alert): cancelar mantém o prompt, confirmar envia", async () => {
-  api.mode = "alert";
-  const page = await open();
-  await typeAndSubmit(page, PROMPT);
-  const dlg = ui(page).locator('[role="dialog"]');
-  await expect(dlg).toContainText("Atenção");
-  await page.keyboard.press("Escape");
-  await expect(dlg).toHaveCount(0);
-  expect(await sent(page)).toEqual([]);
-  await page.locator("#prompt").click();
-  await page.keyboard.press("Enter");
-  await ui(page).locator('[role="dialog"]').getByRole("button", { name: "Enviar mesmo assim" }).click();
-  await expect.poll(() => sent(page)).toEqual([PROMPT]);
-});
-
-test("campo textarea também é mascarado", async () => {
+test("campo textarea: o prompt original segue e é registrado", async () => {
   api.mode = "mask";
   const page = await open({}, "/chat-textarea.html");
   await page.locator("#prompt").fill(PROMPT);
   await page.keyboard.press("Enter");
-  await ui(page).locator('[role="dialog"]').getByRole("button", { name: "Enviar versão mascarada" }).click();
-  await expect.poll(() => sent(page)).toEqual([MASKED]);
+  await expect.poll(() => sent(page)).toEqual([PROMPT]);
+  await expect.poll(() => api.events.length).toBe(1);
 });
 
 test("nunca lê tecla por tecla: nada vai à API até o envio", async () => {
@@ -134,7 +116,7 @@ test("nunca lê tecla por tecla: nada vai à API até o envio", async () => {
 });
 
 test("fora dos domínios configurados: sem indicador e sem nenhuma chamada à API", async () => {
-  api.mode = "block";
+  api.mode = "allow";
   L = await launchWithExtension(config());                         // domains = ["127.0.0.1"]
   const page = await L.ctx.newPage();
   await page.goto(`http://localhost:${api.port}/chat.html`);        // mesmo servidor, outro hostname
@@ -145,24 +127,24 @@ test("fora dos domínios configurados: sem indicador e sem nenhuma chamada à AP
   expect(api.requests.filter((r) => r.path.startsWith("/v1/events"))).toHaveLength(0);
 });
 
-test("API fora do ar: fail-open envia e avisa; fail-closed bloqueia", async () => {
-  let page = await open({ api_url: "http://127.0.0.1:1", fail_mode: "open" });
-  await typeAndSubmit(page, PROMPT);
-  await expect.poll(() => sent(page)).toEqual([PROMPT]);
-  await expect(ui(page).locator(".pill")).toContainText("sem conexão");
-  await L!.ctx.close();
-
-  page = await open({ api_url: "http://127.0.0.1:1", fail_mode: "closed" });
-  await typeAndSubmit(page, PROMPT);
-  await expect(ui(page).locator('[role="dialog"]')).toContainText("Não foi possível verificar");
-  expect(await sent(page)).toEqual([]);
+test("API fora do ar: o envio segue e o indicador avisa que não foi registrado, mesmo com fail_mode closed", async () => {
+  for (const failMode of ["open", "closed"]) {
+    const page = await open({ api_url: "http://127.0.0.1:1", fail_mode: failMode });
+    await typeAndSubmit(page, PROMPT);
+    await expect.poll(() => sent(page)).toEqual([PROMPT]);                          // PASSIVO: nunca impede o envio por falha do analisador
+    await expect(ui(page).locator(".pill")).toContainText("sem conexão");
+    await expect(ui(page).locator('[role="dialog"]')).toHaveCount(0);
+    await L!.ctx.close();
+    L = undefined;
+  }
 });
 
-test("chave errada conta como falha (não como liberação)", async () => {
+test("chave errada: o envio segue e o indicador avisa", async () => {
   const page = await open({ api_key: "ps_errada", fail_mode: "closed" });
   await typeAndSubmit(page, PROMPT);
-  await expect(ui(page).locator('[role="dialog"]')).toContainText("Não foi possível verificar");
-  expect(await sent(page)).toEqual([]);
+  await expect.poll(() => sent(page)).toEqual([PROMPT]);
+  await expect(ui(page).locator(".pill")).toContainText("não foi registrado");
+  await expect(ui(page).locator('[role="dialog"]')).toHaveCount(0);
 });
 
 test("sem configuração: avisa na tela e não envia nada à API", async () => {
@@ -192,7 +174,7 @@ test("arquivo anexado: o nome vai junto do prompt, o conteúdo nunca", async () 
   expect(api.events[1].body.content.attachments).toBeUndefined();
 });
 
-test("inspeção parada pela licença: avisa claramente e NUNCA bloqueia o trabalho, nem em modo fechado", async () => {
+test("inspeção parada pela licença: avisa claramente e o trabalho segue, nem em modo fechado", async () => {
   api.stopped = true;
   const page = await open({ fail_mode: "closed" });
   await typeAndSubmit(page, "SIMULADO: texto qualquer");

@@ -6,6 +6,8 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from promptshield_detection import analyze
+from promptshield_detection.output import to_v2
+from promptshield_detection.scoring import CRITICAL_MIN, HIGH_RISK_MIN, severity_for
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -17,7 +19,7 @@ from app.policy_engine import DEFAULT_POLICIES, PolicySpec, Subject, evaluate
 from app.schemas import EventIn, EventResult, SpanOut
 from app.security import Principal
 
-INCIDENT_MIN_SCORE = 60
+INCIDENT_MIN_SCORE = HIGH_RISK_MIN     # faixa "alto" (50) em diante abre incidente; abaixo disso é só registro e, no máximo, alerta informativo
 _ner: Any = None
 
 
@@ -31,7 +33,21 @@ def init_ner() -> None:
 
 
 def severity(score: int) -> str:
-    return "critico" if score >= 80 else "alto"
+    """Severidade do incidente (só existe de "alto" em diante): 50-69 alto, 70-100 crítico."""
+    return "critico" if score >= CRITICAL_MIN else "alto"
+
+
+def severity_label(score: int) -> str:
+    """Faixas do painel: 0-24 baixo, 25-49 medio (moderado), 50-69 alto, 70-100 critico."""
+    return severity_for(score)
+
+
+def v2_view(a: Analysis, masked_text: str) -> dict:
+    """Resultado padronizado v2 a partir do que está guardado. Análises antigas (sem achados) viram achados por categoria."""
+    findings = a.findings or [{"type": c["id"], "category": c["id"], "confidence": c["confidence"], "rule": "Categoria detectada (análise anterior ao motor 2.0)",
+                               "evidence": None} for c in a.categories]
+    return to_v2(risk_score=a.risk_score, categories=a.categories, findings=findings, masked_prompt=masked_text, reasons=a.reasons or [],
+                 engine_version=a.engine_version or "1.x")
 
 
 def seed_default_policies(session: Session, tenant_id: uuid.UUID) -> None:
@@ -69,7 +85,8 @@ def _result(event: Event, an: Analysis, incident_id: uuid.UUID | None, duplicate
         enforced=an.decision != "allow" or an.would_decide == "allow",
         masked_text=event.masked_text, categories=an.categories, flags=an.flags,
         risk={"score": an.risk_score, "reasons": an.reasons, "score_version": an.score_version},
-        spans=[SpanOut(**s) for s in an.spans], policy_hits=an.policy_hits, incident_id=incident_id, duplicate=duplicate)
+        spans=[SpanOut(**s) for s in an.spans], policy_hits=an.policy_hits, incident_id=incident_id, duplicate=duplicate,
+        analysis_v2=v2_view(an, event.masked_text))
 
 
 def _existing(session: Session, event_id: uuid.UUID) -> EventResult | None:
@@ -99,7 +116,7 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
 
     tenant = session.get(Tenant, p.tenant_id)
     assert tenant is not None
-    an = analyze(_engine_event(ev), ner=_ner, allowed_hosts=governance.allowed_hosts(session))
+    an = analyze(_engine_event(ev), ner=_ner, allowed_hosts=governance.allowed_hosts(session), weights=tenant.risk_weights or None)
 
     exceptions = governance.active_exceptions(session)
     specs = [PolicySpec(id=str(x.id), name=x.name, action=x.action, mode=x.mode, enabled=x.enabled,
@@ -109,7 +126,7 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
                       governance.member_groups(session, ev.actor.user_id))
     pe = evaluate(specs, subject, an.categories, an.risk["score"])
 
-    if force_monitor:
+    if force_monitor or settings.passive_only:      # passivo: o coletor recebe sempre "allow"; `would_decide` guarda o que a política teria feito
         pe.decision = "allow"
     original = None
     if tenant.store_original and text:
@@ -135,7 +152,7 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
 
     analysis = Analysis(
         tenant_id=p.tenant_id, event_pk=pk, categories=an.categories, flags=an.flags, risk_score=an.risk["score"],
-        reasons=an.risk["reasons"], spans=[{"start": s.start, "end": s.end, "type": s.type, "masked": s.masked} for s in an.spans],
+        reasons=an.risk["reasons"], findings=an.findings, engine_version=an.engine_version, spans=[{"start": s.start, "end": s.end, "type": s.type, "masked": s.masked} for s in an.spans],
         decision=pe.decision, would_decide=pe.would_decide, policy_hits=pe.hits, score_version=an.score_version)
     session.add(analysis)
     incident_id = None

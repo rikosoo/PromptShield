@@ -7,7 +7,8 @@ import { whenFull } from "@/lib/format";
 import type { InferenceHookConfig } from "@/lib/types";
 
 export default function InferenceHooksPage() {
-  const { me } = useSession();
+  const { me, tenant } = useSession();
+  const passive = tenant.monitoring_mode !== "legacy_enforcement";    // o produto é PASSIVO: o inference hook só observa e registra
   const isAdmin = me.role === "admin";
   const { data, error, loading, reload } = useLoad(() => api<InferenceHookConfig>("v1/inference-hook/config"), []);
   const [secret, setSecret] = useState("");
@@ -52,8 +53,8 @@ export default function InferenceHooksPage() {
             <fieldset disabled={!isAdmin || busy} className="space-y-4 text-sm">
               <fieldset><legend className="mb-1 font-medium">Modo</legend>
                 <label className="mr-4 inline-flex items-center gap-1"><input type="radio" name="hmode" checked={data.mode === "shadow"} onChange={() => patch({ mode: "shadow" })} /> Sombra (sempre permite e registra o que teria feito)</label>
-                <label className="inline-flex items-center gap-1"><input type="radio" name="hmode" checked={data.mode === "enforce"} onChange={() => patch({ mode: "enforce" })} /> Aplicar (nega conforme as políticas em modo aplicar)</label>
-                {!data.has_secret && <p className="mt-1 text-xs text-muted">Aplicar exige o segredo de assinatura.</p>}
+                {!passive && (<label className="inline-flex items-center gap-1"><input type="radio" name="hmode" checked={data.mode === "enforce"} onChange={() => patch({ mode: "enforce" })} /> Aplicar (nega conforme as políticas em modo aplicar)</label>)}
+                {passive ? <p className="mt-1 text-xs text-muted">O PromptShield é <strong>passivo</strong>: o inference hook sempre permite e registra o que teria feito. Não existe modo aplicar.</p> : !data.has_secret && <p className="mt-1 text-xs text-muted">Aplicar exige o segredo de assinatura.</p>}
               </fieldset>
               <div><label htmlFor="hscope" className="mb-1 block font-medium">O que analisar em cada turno</label>
                 <select id="hscope" className="field w-full max-w-full" value={data.scope} onChange={(e) => patch({ scope: e.target.value as "full" | "latest" })}>

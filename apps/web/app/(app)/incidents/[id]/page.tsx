@@ -3,7 +3,7 @@ import Link from "next/link";
 import { use, useState, type FormEvent } from "react";
 import { Dialog } from "@/components/Dialog";
 import { canTriage, useSession } from "@/components/session";
-import { Chip, DecisionCell, ErrorBox, Loading, MaskedText, Panel, RiskBar, SeverityBadge } from "@/components/ui";
+import { Chip, ErrorBox, Loading, MaskedText, Panel, RiskBar, SeverityBadge } from "@/components/ui";
 import { api, send, useLoad } from "@/lib/api";
 import { pct, whenFull } from "@/lib/format";
 import { appLabel, STATUS_LABEL, STATUSES } from "@/lib/labels";
@@ -69,7 +69,6 @@ export default function IncidentDetail({ params }: { params: Promise<{ id: strin
             <div className="rounded border border-line bg-panel2 p-3" data-testid="evidence"><MaskedText text={inc.masked_text} block /></div>
             <div className="mt-3">{inc.categories.map((c) => <Chip key={c.id}>{name(c.id)} · {pct(c.confidence)}</Chip>)}</div>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-              <DecisionCell decision={inc.decision} would={inc.would_decide} />
               {triage && inc.has_original && !original && <button type="button" className="btn" onClick={() => { setAsk(true); setOrigErr(null); }}>Ver texto original</button>}
               {!inc.has_original && <span className="text-xs text-muted">O texto original não é guardado para este evento.</span>}
               {inc.has_original && !triage && <span className="text-xs text-muted">Só administrador e analista podem pedir o texto original.</span>}

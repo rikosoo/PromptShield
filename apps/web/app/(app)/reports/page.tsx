@@ -61,7 +61,7 @@ export default function ReportsPage() {
         {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
         {list.loading && !list.data && <Loading />}
         {list.data && (list.data.length === 0 ? <Empty>Nenhum relatório gerado ainda.</Empty> : (
-          <div className="overflow-x-auto"><table className="w-full min-w-[40rem] border-collapse" data-testid="reports-table">
+          <div className="relative overflow-x-auto"><table className="w-full min-w-[40rem] border-collapse" data-testid="reports-table">
             <caption className="sr-only">Relatórios gerados</caption>
             <thead><tr><th scope="col" className="th">Relatório</th><th scope="col" className="th">Período</th><th scope="col" className="th">Gerado</th><th scope="col" className="th"><span className="sr-only">Baixar</span></th></tr></thead>
             <tbody>{list.data.map((r) => (

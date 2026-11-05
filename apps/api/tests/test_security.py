@@ -54,6 +54,7 @@ EXPECTED: dict[tuple[str, str], object] = {
     ("POST", "/v1/groups/{group_id}/members"): ADMIN, ("DELETE", "/v1/groups/{group_id}/members/{user_id}"): ADMIN,
     ("POST", "/v1/policies/{policy_id}/exceptions"): ADMIN, ("POST", "/v1/exceptions/{exception_id}/revoke"): ADMIN,
     ("POST", "/v1/allowlist"): ADMIN, ("DELETE", "/v1/allowlist/{entry_id}"): ADMIN,
+    ("GET", "/v1/risk-weights"): ALL, ("PUT", "/v1/risk-weights"): ADMIN,
     ("POST", "/v1/enroll"): ENROLL,
     ("GET", "/sensor/install.ps1"): PUBLIC, ("GET", "/sensor/install.sh"): PUBLIC,      # sem segredo: o token vai na linha de comando da máquina
     ("GET", "/sensor/promptshield-sensor.pyz"): PUBLIC, ("GET", "/sensor/manifest.json"): PUBLIC,

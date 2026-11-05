@@ -9,8 +9,8 @@ Classificação da integração: **EXPERIMENTAL** (ver "Limites e o que não foi
 - Lê o texto **apenas no momento do envio** (Enter ou clique em enviar). Nunca tecla por tecla.
 - Mostra sempre um indicador no canto da tela ("PromptShield: monitoramento ativo") com link para a **política de uso de IA da empresa**.
 - Envia o evento (texto, usuário, app) à API da empresa, nunca a terceiros. A chave da API fica só no service worker; o content script não a recebe.
-- Aplica a decisão: **permitir** (envia), **avisar** antes do envio, **mascarar com confirmação** (mostra a versão mascarada e só envia se o usuário confirmar), **bloquear**, **pedir justificativa** (mínimo de 10 caracteres, gravada na auditoria).
-- API fora do ar: `fail_mode: open` envia e avisa na tela; `closed` bloqueia com mensagem. Chave errada conta como falha.
+**PASSIVA desde 2026-11-05:** a extensão só observa. Lê o texto no instante do envio (Enter ou clique) e **deixa o envio seguir na hora, sem alterar nada**; a análise vai em segundo plano. Nunca bloqueia, não mostra diálogo de confirmação, não mascara nem reescreve o prompt. O que a API devolver (`block`, `mask`, ...) é ignorado pela tela (e o servidor passivo devolve sempre `allow`).
+- API fora do ar, lenta ou chave errada: o envio do usuário **não é afetado**; o indicador avisa que aquele envio não foi registrado (também com `fail_mode: closed`).
 - Se o site mudar o HTML e o campo de prompt não for mais encontrado, o indicador **avisa** que o monitoramento pode estar inativo.
 
 Cada site é um módulo separado em `src/sites/` (campo de prompt, botão de enviar, tecla de envio). Se o site mudar, só o módulo dele quebra.
@@ -98,5 +98,5 @@ Ao anexar (seletor de arquivo, arrastar ou colar) num site monitorado, a extens�
 - **Os seletores de ChatGPT e Claude.ai não foram conferidos contra as páginas reais** (`chatgpt.com` é negado e `claude.ai` responde 403 ao ambiente de desenvolvimento). Os testes usam uma página local que imita o campo de prompt e o botão. Os módulos têm listas de alternativas, e o indicador avisa quando o campo some, mas só um teste manual nos sites reais promove esta integração de EXPERIMENTAL para REAL. **Checklist:** instalar o `dist/prod` em um perfil de teste, abrir cada site, digitar um prompt com CPF sintético e confirmar o diálogo; repetir com Enter e com clique.
 - **Editores ProseMirror** (usados por ambos os sites, segundo meu conhecimento) são preenchidos com `execCommand("insertText")`; não testado nos sites reais.
 - **CSP dos sites:** a interface usa shadow DOM, sem `innerHTML`, e folhas de estilo construídas (`adoptedStyleSheets`). Se a CSP de um site bloquear isso, o diálogo não aparece: **A VERIFICAR**.
-- **Primeira leitura da política gerenciada** leva ~3 s no Chromium 141 testado; durante esse tempo o envio fica retido (nunca passa sem decisão).
+- **Primeira leitura da política gerenciada** leva ~3 s no Chromium 141 testado; durante esse tempo o texto é lido mas só vai à API depois da configuração; o envio do usuário nunca espera.
 - Os testes automáticos usam um Chromium 141 em modo `--headless=new` com o shadow DOM **aberto** (build de teste); em produção ele é fechado (checado no build).

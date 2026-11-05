@@ -102,6 +102,7 @@ class EventResult(BaseModel):
     policy_hits: list[dict[str, str]]
     incident_id: uuid.UUID | None = None
     duplicate: bool = False
+    analysis_v2: dict[str, Any] | None = None     # resultado padronizado do motor 2.0 (monitoramento passivo)
 
 
 class PolicyIn(BaseModel):

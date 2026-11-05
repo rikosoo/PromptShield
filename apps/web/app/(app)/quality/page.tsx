@@ -39,7 +39,7 @@ export default function QualityPage() {
           </Panel>
           <Panel title="Por categoria (mais problemas primeiro)">
             {s.data.categories.length === 0 ? <Empty>Nenhuma revisão ainda.</Empty> : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full min-w-[34rem] border-collapse">
                   <caption className="sr-only">Revisões por categoria</caption>
                   <thead><tr><th scope="col" className="th">Categoria</th><th scope="col" className="th">Revisados</th><th scope="col" className="th">Falsos positivos</th><th scope="col" className="th">Faltou pegar</th><th scope="col" className="th">Precisão estimada</th></tr></thead>

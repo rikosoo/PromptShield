@@ -68,7 +68,7 @@ export default function DevicesPage() {
           </div>
           <Panel title="Máquinas">
             {d.devices.length === 0 ? <Empty>Nenhuma máquina matriculada.</Empty> : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[40rem] border-collapse" data-testid="devices-table">
+              <div className="relative overflow-x-auto"><table className="w-full min-w-[40rem] border-collapse" data-testid="devices-table">
                 <caption className="sr-only">Máquinas matriculadas</caption>
                 <thead><tr><th scope="col" className="th">Máquina</th><th scope="col" className="th">Sistema</th><th scope="col" className="th">Ferramentas</th><th scope="col" className="th">Matriculada</th><th scope="col" className="th">Último envio</th><th scope="col" className="th">Situação</th><th scope="col" className="th">Ocupa vaga</th><th scope="col" className="th"><span className="sr-only">Ações</span></th></tr></thead>
                 <tbody>{d.devices.map((x) => (
@@ -95,7 +95,7 @@ export default function DevicesPage() {
               <button className="btn" disabled={busy}>Criar token</button>
             </form>
             {tokens.data && (tokens.data.length === 0 ? <Empty>Nenhum token.</Empty> : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[36rem] border-collapse" data-testid="tokens-table">
+              <div className="relative overflow-x-auto"><table className="w-full min-w-[36rem] border-collapse" data-testid="tokens-table">
                 <caption className="sr-only">Tokens de matrícula</caption>
                 <thead><tr><th scope="col" className="th">Nome</th><th scope="col" className="th">Prefixo</th><th scope="col" className="th">Situação</th><th scope="col" className="th">Usos</th><th scope="col" className="th">Expira</th><th scope="col" className="th"><span className="sr-only">Ações</span></th></tr></thead>
                 <tbody>{tokens.data.map((t) => (

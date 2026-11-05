@@ -7,7 +7,7 @@ export type Action = "allow" | "mask" | "block" | "ask_justification" | "alert";
 export interface Me { kind: string; id: string; tenant_id: string; role: Role | null; email: string | null }
 export interface Tenant {
   id: string; name: string; failure_mode: "open" | "closed"; retention_days: number; store_original: boolean;
-  policy_url: string | null; monitored_domains: string[]; contract?: Contract; is_demo: boolean; volume_threshold_per_hour: number; original_retention_days: number; omit_text_categories: string[];
+  policy_url: string | null; monitored_domains: string[]; contract?: Contract; monitoring_mode?: "passive" | "legacy_enforcement"; is_demo: boolean; volume_threshold_per_hour: number; original_retention_days: number; omit_text_categories: string[];
 }
 export interface Contract { suspended: boolean; suspended_at: string | null; suspended_reason: string | null; license_expires_at: string | null; days_to_expiry: number | null; expired: boolean }
 export type LicenseStateId = "nao_ativado" | "ativo" | "sem_contato" | "em_tolerancia" | "expirado" | "encerrado";
@@ -24,10 +24,24 @@ export interface TaxonomyItem { id: string; nome: string; grupo: string; risco_p
 export interface Overview {
   days: number;
   high_risk_threshold: number;
-  totals: { events: number; high_risk: number; with_code: number; with_sensitive: number; agent_actions: number; blocked: number; would_block: number; users: number };
+  totals: {
+    events: number; high_risk: number; with_code: number; with_sensitive: number; agent_actions: number; blocked: number; would_block: number; users: number;
+    credentials: number; personal_data: number; financial_data: number; injections: number; alerts: number;
+  };
+  alert_min: number;
+  top_users: { user_id: string; alerts: number; max_score: number }[];
+  monthly: { month: string; events: number; alerts: number; high_risk: number }[];
   daily: { date: string; events: number; high_risk: number }[];
   by_department: { department: string; events: number; high_risk: number }[];
-  by_app: { app: string; corporate: number; personal: number }[];
+  by_app: { app: string; corporate: number; personal: number; sensitive: number }[];
+}
+
+export type AlertStatus = "sem_alerta" | "novo" | "em_analise" | "falso_positivo" | "resolvido";
+export interface V2Finding { type: string; category: string; severity: string; confidence: number; reason: string | null; evidence: string | null; impact: string | null }
+/** Resultado padronizado do motor 2.0 (monitoramento passivo): nunca traz o valor secreto, só a evidência mascarada. */
+export interface AnalysisV2 {
+  risk_score: number; severity: string; monitoring_mode: "passive"; detected_categories: string[]; confidence: number; alert_level: string; action: "monitor";
+  masked_prompt: string; findings: V2Finding[]; reasons: { rule: string; contribution: number }[]; recommendation: string; engine_version: string;
 }
 
 export interface PromptRow {
@@ -38,6 +52,7 @@ export interface PromptRow {
   risk_score: number; reasons: { rule: string; contribution: number; category?: string }[];
   decision: Action; would_decide: Action; policy_hits: { policy_id: string; name: string; action: string; mode: string; excepted?: string }[];
   incident_id: string | null;
+  severity: Severity; alert_status: AlertStatus; engine_version?: string | null;
   feedback?: Feedback | null;
 }
 

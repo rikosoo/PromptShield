@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { Dialog } from "@/components/Dialog";
 import { Attachments } from "@/components/Attachments";
 import { FeedbackForm } from "@/components/FeedbackForm";
-import { MaskedText } from "@/components/ui";
+import { MaskedText, SeverityTag } from "@/components/ui";
+import { api, useLoad } from "@/lib/api";
 import { whenFull } from "@/lib/format";
-import { appLabel, intentLabel, KIND_LABEL, spanLabel } from "@/lib/labels";
-import type { Feedback, PromptRow } from "@/lib/types";
+import { ALERT_LEVEL_LABEL, appLabel, intentLabel, KIND_LABEL, SEVERITY_LABEL, spanLabel } from "@/lib/labels";
+import type { AnalysisV2, Feedback, PromptRow } from "@/lib/types";
 
 /** Detalhe de um prompt (texto sempre mascarado). Usado em "Análise de prompts" e "Todos os prompts". */
 export function PromptDetailDialog({ row: incoming, onClose, onSession, onPerson, onReviewed }: {
@@ -16,6 +17,8 @@ export function PromptDetailDialog({ row: incoming, onClose, onSession, onPerson
   const [saved, setSaved] = useState<{ id: string; fb: Feedback } | null>(null);
   useEffect(() => setSaved(null), [incoming?.event_id]);
   const row = incoming && saved?.id === incoming.event_id ? { ...incoming, feedback: saved.fb } : incoming;
+  const v2 = useLoad(() => (incoming ? api<{ analysis_v2: AnalysisV2 }>(`v1/events/${incoming.event_id}`) : Promise.resolve(null)), [incoming?.event_id]);
+  const a = v2.data?.analysis_v2;
   return (
     <Dialog open={!!row} onClose={onClose} title="Detalhe do prompt" wide>
       {row && (
@@ -36,6 +39,26 @@ export function PromptDetailDialog({ row: incoming, onClose, onSession, onPerson
               <div><h3 className="mb-1 text-xs font-semibold uppercase text-muted">Prompt (mascarado)</h3><div className="rounded border border-line bg-panel2 p-2"><MaskedText text={row.masked_text} block /></div></div>
               <div><h3 className="mb-1 text-xs font-semibold uppercase text-muted">Motivos do score</h3>
                 <ul className="space-y-1 font-mono text-xs">{row.reasons.map((r, i) => <li key={i}>+{r.contribution} · {r.rule}</li>)}{!row.reasons.length && <li>sem motivos de risco</li>}</ul></div>
+              {a && (
+                <div data-testid="technical-analysis" className="space-y-2 rounded border border-line p-3">
+                  <h3 className="text-xs font-semibold uppercase text-muted">Análise técnica (motor {a.engine_version}, monitoramento passivo)</h3>
+                  <p className="flex flex-wrap items-center gap-2"><SeverityTag severity={row.severity} /> <span>Alerta: <strong>{ALERT_LEVEL_LABEL[a.alert_level] ?? a.alert_level}</strong></span>
+                    <span className="text-muted">· score {a.risk_score} · confiança da regra {Math.round(a.confidence * 100)}% (não é probabilidade calibrada)</span></p>
+                  {a.findings.length > 0 ? (
+                    <ul className="space-y-2">
+                      {a.findings.map((f, i) => (
+                        <li key={i} className="rounded bg-panel2 p-2 text-xs" data-testid="finding">
+                          <div className="font-semibold">{f.type} <span className="font-normal text-muted">· {SEVERITY_LABEL[(f.severity === "critical" ? "critico" : f.severity === "high" ? "alto" : f.severity === "moderate" ? "medio" : "baixo") as keyof typeof SEVERITY_LABEL]} · confiança {Math.round(f.confidence * 100)}%</span></div>
+                          {f.evidence && <div>Evidência (mascarada): <code className="font-mono">{f.evidence}</code></div>}
+                          {f.reason && <div>Motivo: {f.reason}</div>}
+                          {f.impact && <div className="text-muted">Possível impacto: {f.impact}</div>}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p className="text-xs text-muted">Nenhum dado sensível ou comportamento de risco identificado.</p>}
+                  <p className="text-xs"><strong>Recomendação ao analista:</strong> {a.recommendation}</p>
+                </div>
+              )}
               {row.policy_hits.length > 0 && <div><h3 className="mb-1 text-xs font-semibold uppercase text-muted">Políticas que casaram</h3>
                 <ul className="space-y-1 text-xs">{row.policy_hits.map((h) => <li key={h.policy_id}>{h.name} <span className="text-muted">({h.excepted === "true" ? "exceção: não aplicada" : h.mode === "monitor" ? "monitorar" : "aplicar"})</span></li>)}</ul></div>}
               <FeedbackForm key={`${row.event_id}:${row.feedback?.updated_at ?? ""}`} row={row} onSaved={(fb) => { setSaved({ id: row.event_id, fb }); onReviewed?.(); }} />

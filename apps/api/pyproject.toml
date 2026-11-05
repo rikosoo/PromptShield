@@ -26,7 +26,7 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["db: exige PostgreSQL real (DATABASE_URL_TEST)", "security: testes de segurança (o CI roda este grupo à parte)"]
+markers = ["db: exige PostgreSQL real (DATABASE_URL_TEST)", "passive: roda com o modo passivo real (settings.passive_only = True, o padrão do produto)", "security: testes de segurança (o CI roda este grupo à parte)"]
 
 [tool.ruff]
 line-length = 130

@@ -91,14 +91,17 @@ export default function OverviewPage() {
       {data && (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8" aria-label="Indicadores">
-            <Kpi label="Prompts capturados" value={data.totals.events} />
+            <Kpi label="Prompts analisados" value={data.totals.events} />
             <Kpi label="Usuários ativos" value={data.totals.users} />
+            <Kpi label="Com alerta" value={data.totals.alerts} hint={`score ≥ ${data.alert_min}`} />
             <Kpi label="Alto risco" value={data.totals.high_risk} hint={`score ≥ ${data.high_risk_threshold}`} />
             <Kpi label="Com dado sensível" value={data.totals.with_sensitive} />
+            <Kpi label="Credenciais detectadas" value={data.totals.credentials} />
+            <Kpi label="Dados pessoais" value={data.totals.personal_data} />
+            <Kpi label="Dados financeiros" value={data.totals.financial_data} />
+            <Kpi label="Prompt injection suspeita" value={data.totals.injections} />
             <Kpi label="Com código" value={data.totals.with_code} />
             <Kpi label="Ações de agente" value={data.totals.agent_actions} />
-            <Kpi label="Bloqueados" value={data.totals.blocked} />
-            <Kpi label="Seriam bloqueados" value={data.totals.would_block} hint="políticas em monitorar" />
           </div>
           <Reliability days={days} />
           <div className="grid gap-4 xl:grid-cols-2">
@@ -107,6 +110,22 @@ export default function OverviewPage() {
             <Panel title="Alto risco por departamento">
               <BarList ariaLabel="Alto risco por departamento" rows={data.by_department.map((d) => ({ label: `${d.department} (${d.events})`, value: d.high_risk, extra: `de ${d.events} eventos` }))} />
               <p className="mt-2 text-xs text-muted">Entre parênteses, o total de eventos do departamento.</p>
+            </Panel>
+            <Panel title="Usuários com mais alertas">
+              <BarList ariaLabel="Usuários com mais alertas" rows={data.top_users.map((u) => ({ label: u.user_id, value: u.alerts, extra: `maior score ${u.max_score}` }))} />
+              {!data.top_users.length && <p className="text-sm text-muted">Nenhum usuário com alerta no período.</p>}
+            </Panel>
+            <Panel title="Ferramentas que mais receberam dado sensível">
+              <BarList ariaLabel="Ferramentas que mais receberam dado sensível"
+                rows={[...data.by_app].filter((a) => a.sensitive > 0).sort((a, b) => b.sensitive - a.sensitive).slice(0, 6).map((a) => ({ label: appLabel(a.app), value: a.sensitive, extra: `de ${a.corporate + a.personal} prompts` }))} />
+              {!data.by_app.some((a) => a.sensitive > 0) && <p className="text-sm text-muted">Nenhum dado sensível no período.</p>}
+            </Panel>
+            <Panel title="Evolução mensal">
+              <table className="w-full text-sm" data-testid="monthly">
+                <thead><tr className="text-left text-xs text-muted"><th className="py-1">Mês</th><th>Prompts</th><th>Com alerta</th><th>Alto risco</th></tr></thead>
+                <tbody>{data.monthly.map((m) => <tr key={m.month} className="border-t border-line"><td className="py-1 font-mono">{m.month}</td><td>{m.events}</td><td>{m.alerts}</td><td>{m.high_risk}</td></tr>)}</tbody>
+              </table>
+              <p className="mt-2 text-xs text-muted">A evolução diária de alto risco está no gráfico acima; o período máximo do painel é de 90 dias.</p>
             </Panel>
             <Panel title="Categorias mais frequentes">
               {cats.data && <BarList ariaLabel="Categorias mais frequentes" rows={Object.entries(cats.data).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id, n]) => ({ label: name(id), value: n }))} />}

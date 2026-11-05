@@ -30,7 +30,7 @@ export default function RiskPage() {
         <>
           <Panel title="Departamentos">
             {data.departments.length === 0 ? <Empty>Sem atividade no período.</Empty> : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full min-w-[40rem] border-collapse" data-testid="dept-risk">
                   <caption className="sr-only">Indicador de risco por departamento (média dos usuários)</caption>
                   <thead><tr><th scope="col" className="th">Departamento</th><th scope="col" className="th">Indicador (média)</th><th scope="col" className="th">Usuários</th><th scope="col" className="th">Em risco alto</th><th scope="col" className="th">Eventos</th><th scope="col" className="th">Evolução</th></tr></thead>
@@ -47,7 +47,7 @@ export default function RiskPage() {
           </Panel>
           <Panel title="Usuários (maior indicador primeiro)">
             {data.users.length === 0 ? <Empty>Sem atividade no período.</Empty> : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full min-w-[48rem] border-collapse" data-testid="user-risk">
                   <caption className="sr-only">Indicador de risco por usuário</caption>
                   <thead><tr><th scope="col" className="th">Usuário</th><th scope="col" className="th">Departamento</th><th scope="col" className="th">Indicador</th><th scope="col" className="th">Por quê</th><th scope="col" className="th">Eventos / alto risco</th><th scope="col" className="th">Evolução</th></tr></thead>

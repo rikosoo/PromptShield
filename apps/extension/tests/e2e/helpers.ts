@@ -16,6 +16,7 @@ export class MockApi {
   port = 0;
   mode: Mode = "allow";
   stopped = false;   // simula a licença/contrato que parou a inspeção
+  delayMs = 0;       // simula uma API lenta: a extensão passiva NÃO pode atrasar o envio do usuário
   requests: Recorded[] = [];
   remote = { failure_mode: "open", domains: ["127.0.0.1", "localhost"], policy_url: "https://intranet.exemplo.test/politica-ia" };
 
@@ -43,6 +44,7 @@ export class MockApi {
         return;
       }
       if (url.pathname === "/v1/events" && req.method === "POST") {
+        if (this.delayMs) await new Promise((ok) => setTimeout(ok, this.delayMs));
         const text: string = body.content.text;
         const hasCpf = /\d{3}\.\d{3}\.\d{3}-\d{2}/.test(text);
         const masked = text.replace(/(\d{3}\.\d{3}\.\d{3}-)(\d{2})/g, "***.***.***-$2");

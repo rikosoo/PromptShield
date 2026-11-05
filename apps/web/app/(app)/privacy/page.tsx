@@ -126,7 +126,7 @@ export default function PrivacyPage() {
                 <select id="grace" className="field" value={grace} onChange={(e) => setGrace(Number(e.target.value))}>{[0, 1, 24, 72, 168].map((h) => <option key={h} value={h}>{h === 0 ? "0 h (revoga já)" : `${h} h`}</option>)}</select></div>
             </form>
             {keys.data && (keys.data.length === 0 ? <Empty>Nenhuma chave.</Empty> : (
-              <div className="overflow-x-auto"><table className="w-full min-w-[40rem] border-collapse" data-testid="keys-table">
+              <div className="relative overflow-x-auto"><table className="w-full min-w-[40rem] border-collapse" data-testid="keys-table">
                 <caption className="sr-only">Chaves de API</caption>
                 <thead><tr><th scope="col" className="th">Nome</th><th scope="col" className="th">Prefixo</th><th scope="col" className="th">Situação</th><th scope="col" className="th">Expira</th><th scope="col" className="th">Último uso</th><th scope="col" className="th"><span className="sr-only">Ações</span></th></tr></thead>
                 <tbody>{keys.data.map((k) => (

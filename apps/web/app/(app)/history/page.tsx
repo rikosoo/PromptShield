@@ -4,15 +4,14 @@ import { Attachments } from "@/components/Attachments";
 import { VERDICT_LABEL } from "@/components/FeedbackForm";
 import { PromptDetailDialog } from "@/components/PromptDetail";
 import { useSession } from "@/components/session";
-import { Chip, DecisionCell, Empty, ErrorBox, Loading, Pager, Panel, RiskBar } from "@/components/ui";
+import { AlertStatusBadge, Chip, Empty, ErrorBox, Loading, Pager, Panel, RiskBar, SeverityTag } from "@/components/ui";
 import { apiPage, api, qs, useLoad } from "@/lib/api";
 import { clip, splitMasks, when } from "@/lib/format";
-import { APP_LABEL, appLabel, KIND_LABEL } from "@/lib/labels";
+import { ALERT_STATUS_LABEL, APP_LABEL, appLabel, KIND_LABEL, SEVERITY_LABEL } from "@/lib/labels";
 import type { PersonRow, PromptRow } from "@/lib/types";
 import { useTaxonomy } from "@/lib/useTaxonomy";
 
 const PAGE = 25;
-const DECISIONS: Record<string, string> = { allow: "Permitir", mask: "Mascarar", block: "Bloquear", ask_justification: "Pedir justificativa", alert: "Alertar" };
 
 /** Texto mascarado com a palavra buscada destacada (os trechos mascarados mantêm o destaque próprio). */
 function Highlighted({ text, term }: { text: string; term: string }) {
@@ -46,7 +45,8 @@ export default function HistoryPage() {
   const [app, setApp] = useState("");
   const [kind, setKind] = useState("");
   const [category, setCategory] = useState("");
-  const [decision, setDecision] = useState("");
+  const [severity, setSeverity] = useState("");
+  const [alertStatus, setAlertStatus] = useState("");
   const [department, setDepartment] = useState("");
   const [days, setDays] = useState(30);
   const [onlyRisk, setOnlyRisk] = useState(false);
@@ -69,15 +69,15 @@ export default function HistoryPage() {
   const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(0); };
   const people = useLoad(() => api<PersonRow[]>(`v1/people${qs({ days, limit: 100 })}`), [days]);
   const filters = {
-    days, user_q: personApplied, q: wordApplied, app: app || undefined, kind, category, decision, department,
+    days, user_q: personApplied, q: wordApplied, app: app || undefined, kind, category, severity: severity || undefined, alert_status: alertStatus || undefined, department,
     session_id: sessionId, sensor: sensor?.id, has_attachment: withFile ? true : undefined, review, min_score: onlyRisk ? 1 : 0, personal_account: personalOnly ? true : undefined,
   };
   const list = useLoad(() => (urlRead ? apiPage<PromptRow[]>(`v1/events${qs({ ...filters, sort: "recent", limit: PAGE, offset: page * PAGE })}`)
     : Promise.resolve({ items: [] as PromptRow[], total: 0 })),     // espera ler o ?sensor= da URL antes da primeira busca (senão piscaria a lista inteira)
-    [days, personApplied, wordApplied, app, kind, category, decision, department, onlyRisk, personalOnly, withFile, review, sessionId, sensor?.id, urlRead, page]);
+    [days, personApplied, wordApplied, app, kind, category, severity, alertStatus, department, onlyRisk, personalOnly, withFile, review, sessionId, sensor?.id, urlRead, page]);
   const departments = Array.from(new Set((people.data ?? []).map((p) => p.department).filter((d): d is string => !!d))).sort();
-  const anyFilter = sessionId || personApplied || wordApplied || app || kind || category || decision || department || onlyRisk || personalOnly || withFile || review || sensor;
-  const clear = () => { setPerson(""); setPersonApplied(""); setWord(""); setWordApplied(""); setApp(""); setKind(""); setCategory(""); setDecision(""); setDepartment(""); setOnlyRisk(false); setPersonalOnly(false); setWithFile(false); setReview(""); setSessionId(""); setSensor(null); setPage(0); };
+  const anyFilter = sessionId || personApplied || wordApplied || app || kind || category || severity || alertStatus || department || onlyRisk || personalOnly || withFile || review || sensor;
+  const clear = () => { setPerson(""); setPersonApplied(""); setWord(""); setWordApplied(""); setApp(""); setKind(""); setCategory(""); setSeverity(""); setAlertStatus(""); setDepartment(""); setOnlyRisk(false); setPersonalOnly(false); setWithFile(false); setReview(""); setSessionId(""); setSensor(null); setPage(0); };
   const choosePerson = (id: string) => { setPerson(id); setPersonApplied(id); setSelected(null); setPage(0); };
 
   return (
@@ -107,9 +107,12 @@ export default function HistoryPage() {
           <select id="category" className="field w-full" value={category} onChange={(e) => reset(setCategory)(e.target.value)}>
             <option value="">Todas</option>
             {groups.map((g) => <optgroup key={g.group} label={g.group}>{g.items.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</optgroup>)}</select></div>
-        <div><label htmlFor="decision" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Decisão (tomada ou hipotética)</label>
-          <select id="decision" className="field w-full" value={decision} onChange={(e) => reset(setDecision)(e.target.value)}>
-            <option value="">Todas</option>{Object.entries(DECISIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+        <div><label htmlFor="severity" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Severidade</label>
+          <select id="severity" className="field w-full" value={severity} onChange={(e) => reset(setSeverity)(e.target.value)}>
+            <option value="">Todas</option>{(["baixo", "medio", "alto", "critico"] as const).map((k) => <option key={k} value={k}>{SEVERITY_LABEL[k]}</option>)}</select></div>
+        <div><label htmlFor="astatus" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Status do alerta</label>
+          <select id="astatus" className="field w-full" value={alertStatus} onChange={(e) => reset(setAlertStatus)(e.target.value)}>
+            <option value="">Todos</option>{Object.entries(ALERT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <div><label htmlFor="review" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Revisão humana</label>
           <select id="review" className="field w-full" value={review} onChange={(e) => reset(setReview)(e.target.value)}>
             <option value="">Todas</option><option value="pending">Ainda sem revisão</option><option value="reviewed">Já revisadas</option>
@@ -154,12 +157,12 @@ export default function HistoryPage() {
         {list.data && (list.data.items.length === 0 ? <Empty>Nenhum prompt com esses filtros.</Empty> : (
           <>
             <p className="mb-2 text-sm text-muted" role="status" data-testid="history-total">{list.data.total} resultado(s)</p>
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[48rem] border-collapse">
                 <caption className="sr-only">Todos os prompts capturados, do mais recente ao mais antigo</caption>
                 <thead><tr>
                   <th scope="col" className="th">Quando</th><th scope="col" className="th">Pessoa</th><th scope="col" className="th">Ferramenta</th>
-                  <th scope="col" className="th">Prompt (mascarado)</th><th scope="col" className="th">Risco</th><th scope="col" className="th">Decisão</th>
+                  <th scope="col" className="th">Prompt (mascarado)</th><th scope="col" className="th">Score</th><th scope="col" className="th">Severidade</th><th scope="col" className="th">Status do alerta</th>
                 </tr></thead>
                 <tbody>
                   {list.data.items.map((p) => (
@@ -178,7 +181,8 @@ export default function HistoryPage() {
                         <div className="mt-1">{p.categories.map((c) => <Chip key={c.id}>{name(c.id)}</Chip>)}</div>
                       </td>
                       <td className="td"><RiskBar score={p.risk_score} /></td>
-                      <td className="td"><DecisionCell decision={p.decision} would={p.would_decide} /></td>
+                      <td className="td"><SeverityTag severity={p.severity} /></td>
+                      <td className="td"><AlertStatusBadge status={p.alert_status} /></td>
                     </tr>
                   ))}
                 </tbody>

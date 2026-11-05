@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Chip, DecisionCell, Empty, ErrorBox, Loading, MaskedText, Panel, RiskBar, SeverityBadge } from "@/components/ui";
+import { Chip, Empty, ErrorBox, Loading, MaskedText, Panel, RiskBar, SeverityBadge } from "@/components/ui";
 import { api, qs, useLoad } from "@/lib/api";
 import { clip, pct, when } from "@/lib/format";
 import { STATUS_LABEL, STATUSES } from "@/lib/labels";
@@ -37,7 +37,7 @@ export default function IncidentsPage() {
         {error && <ErrorBox message={error} onRetry={reload} />}
         {loading && !data && <Loading />}
         {data && (data.length === 0 ? <Empty>Nenhum incidente com esses filtros.</Empty> : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[46rem] border-collapse">
               <caption className="sr-only">Fila de incidentes, do mais arriscado ao menos</caption>
               <thead><tr>
@@ -53,7 +53,7 @@ export default function IncidentsPage() {
                     <td className="td font-mono">{pct(i.confidence)}</td>
                     <td className="td"><div className="font-medium">{i.user_id}</div><div className="text-xs text-muted">{i.department ?? "sem departamento"}</div></td>
                     <td className="td max-w-xs">{i.categories.map((c) => <Chip key={c.id}>{name(c.id)}</Chip>)}<div className="mt-1 text-xs text-muted"><MaskedText text={clip(i.masked_text.replace(/\s+/g, " "), 70)} /></div></td>
-                    <td className="td">{STATUS_LABEL[i.status as IncidentStatus]}<div className="mt-1"><DecisionCell decision={i.decision} would={i.would_decide} /></div></td>
+                    <td className="td">{STATUS_LABEL[i.status as IncidentStatus]}</td>
                     <td className="td text-sm">{i.assignee_email ?? <span className="text-muted">sem responsável</span>}</td>
                     <td className="td whitespace-nowrap font-mono text-xs">{when(i.created_at)}</td>
                   </tr>

@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     # dono/superuser: só para migrações e CLI (Alembic e `python -m app.cli`)
     admin_database_url: str | None = None
     version: str = "0.3.0"
+    # O PromptShield é PASSIVO: observa, analisa, registra e alerta. Nunca bloqueia, nem altera, nem interrompe um prompt.
+    # Com isto ligado (padrão) a decisão devolvida aos coletores é sempre "allow"; a que uma política teria tomado fica em `would_decide`.
+    # Desligar só existe para o código legado de aplicação de políticas (testes); não é um modo suportado do produto.
+    passive_only: bool = True
 
     # origens com permissão de CORS, separadas por vírgula (ex.: chrome-extension://<id>,https://console.empresa.com). Padrão: nenhuma.
     cors_allowed_origins: str = ""

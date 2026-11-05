@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { apiGet, expectAccessible, login, logout, openPanel, USERS } from "./helpers";
 
 // Valores esperados SEMPRE vêm da API (pelo proxy do console) no momento do teste: nada é digitado aqui.
-interface Overview { totals: { events: number; high_risk: number; with_code: number; with_sensitive: number; users: number }; daily: { events: number; high_risk: number }[]; by_department: { department: string; events: number; high_risk: number }[] }
+interface Overview { totals: { events: number; high_risk: number; with_code: number; with_sensitive: number; users: number; credentials: number; personal_data: number; financial_data: number; injections: number }; daily: { events: number; high_risk: number }[]; by_department: { department: string; events: number; high_risk: number }[] }
 
 test("login, selo de dados de exemplo e proteção de rotas", async ({ page }) => {
   await page.goto("/");
@@ -36,10 +36,18 @@ test("visão geral: indicadores iguais aos da API", async ({ page }) => {
   await login(page, USERS.analista);
   const o = (await apiGet<Overview>(page, "v1/stats/overview?days=14")).data;
   const kpi = (label: string) => page.getByTestId("kpi").filter({ hasText: label }).locator("div").first();
-  await expect(kpi("Prompts capturados")).toHaveText(String(o.totals.events));
+  await expect(kpi("Prompts analisados")).toHaveText(String(o.totals.events));
   await expect(kpi("Alto risco")).toHaveText(String(o.totals.high_risk));
   await expect(kpi("Com código")).toHaveText(String(o.totals.with_code));
   await expect(kpi("Com dado sensível")).toHaveText(String(o.totals.with_sensitive));
+  await expect(kpi("Credenciais detectadas")).toHaveText(String(o.totals.credentials));
+  await expect(kpi("Dados pessoais")).toHaveText(String(o.totals.personal_data));
+  await expect(kpi("Dados financeiros")).toHaveText(String(o.totals.financial_data));
+  await expect(kpi("Prompt injection suspeita")).toHaveText(String(o.totals.injections));
+  await expect(page.getByTestId("kpi").filter({ hasText: /Bloqueados/ })).toHaveCount(0);        // produto passivo: não há "bloqueados"
+  await expect(page.getByRole("list", { name: "Usuários com mais alertas" })).toBeVisible();
+  await expect(page.getByTestId("monthly")).toBeVisible();
+  await expect(page.getByTestId("passive-badge")).toContainText("monitoramento passivo");
   expect(o.totals.events).toBeGreaterThan(50);
   expect(o.daily.reduce((a, d) => a + d.events, 0)).toBe(o.totals.events);
   await expect(page.getByRole("img", { name: /Eventos de alto risco por dia/ })).toBeVisible();
@@ -49,7 +57,7 @@ test("visão geral: indicadores iguais aos da API", async ({ page }) => {
   await expect(page.getByRole("list", { name: "Uso por ferramenta" })).toContainText("pessoal");
   await page.getByLabel("Período").selectOption("7");                          // o período muda os números
   const o7 = (await apiGet<Overview>(page, "v1/stats/overview?days=7")).data;
-  await expect(kpi("Prompts capturados")).toHaveText(String(o7.totals.events));
+  await expect(kpi("Prompts analisados")).toHaveText(String(o7.totals.events));
 });
 
 test("análise de prompts: ordenação por risco, filtros e painel de categorias", async ({ page }) => {
@@ -81,7 +89,7 @@ test("análise de prompts: ordenação por risco, filtros e painel de categorias
 
   // filtros por caixa de seleção
   await openPanel(page, "panel-filtros");
-  for (const [label, param] of [["Contém código", "has_code=true"], ["Dado sensível", "has_sensitive=true"], ["Ação de agente", "agent_action=true"], ["Só bloqueados (ou que seriam)", "only_blocked=true"]] as const) {
+  for (const [label, param] of [["Contém código", "has_code=true"], ["Dado sensível", "has_sensitive=true"], ["Ação de agente", "agent_action=true"], ] as const) {
     await page.getByLabel(label).check();
     const exp = await apiGet<unknown[]>(page, `v1/events?sort=risk&days=14&min_score=1&${param}&limit=20`);
     await expect(page.getByTestId("total")).toHaveText(new RegExp(`^${exp.total} resultado`));
@@ -89,11 +97,33 @@ test("análise de prompts: ordenação por risco, filtros e painel de categorias
     await page.getByLabel(label).uncheck();
   }
 
+  // severidade (0-24, 25-49, 50-69, 70-100) e status do alerta: filtros e colunas do painel passivo
+  for (const col of ["Data/hora", "Usuário", "Departamento", "Ferramenta", "Prompt (mascarado)", "Dados identificados", "Score", "Severidade", "Confiança", "Status do alerta"]) {
+    await expect(page.getByRole("columnheader", { name: col, exact: true })).toBeVisible();
+  }
+  await expect(page.getByRole("columnheader", { name: "Decisão" })).toHaveCount(0);        // não há decisão de bloqueio/permissão para o usuário
+  for (const sev of ["baixo", "medio", "alto", "critico"] as const) {
+    await page.getByLabel("Severidade", { exact: true }).selectOption(sev);
+    const exp = await apiGet<{ severity: string }[]>(page, `v1/events?sort=risk&days=14&min_score=1&severity=${sev}&limit=20`);
+    await expect(page.getByTestId("total")).toHaveText(new RegExp(`^${exp.total} resultado`));
+    for (const row of exp.data) expect(row.severity).toBe(sev);
+  }
+  await page.getByLabel("Severidade", { exact: true }).selectOption("");
+  for (const st of ["sem_alerta", "novo", "em_analise", "falso_positivo", "resolvido"]) {
+    await page.getByLabel("Status do alerta").selectOption(st);
+    const exp = await apiGet<unknown[]>(page, `v1/events?sort=risk&days=14&min_score=1&alert_status=${st}&limit=20`);
+    await expect(page.getByTestId("total")).toHaveText(new RegExp(`^${exp.total} resultado`));
+  }
+  await page.getByLabel("Status do alerta").selectOption("");
+
   // detalhe: texto mascarado, sem os valores brutos do demo
   await rows.first().getByRole("button").first().click();
   const detail = page.getByTestId("prompt-detail");
   await expect(detail).toContainText("Motivos do score");
   await expect(detail).toContainText("Indicador de risco, requer revisão humana");
+  await expect(detail.getByTestId("technical-analysis")).toContainText("monitoramento passivo");     // justificativa técnica: achados, evidência mascarada, recomendação
+  await expect(detail.getByTestId("technical-analysis")).toContainText("Recomendação ao analista");
+  await expect(detail.getByTestId("finding").first()).toContainText("Motivo:");           // evidência mascarada só existe quando há trecho no texto (comando de agente não tem)
   await expectAccessible(page, "detalhe do prompt (diálogo)");
   const body = await page.locator("body").innerText();
   for (const raw of ["S3nh4Fort3x", "AKIAZ7QW4XK2M9PLR3TN", "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8", "4111 1111 1111 1111"]) expect(body).not.toContain(raw);
@@ -162,7 +192,8 @@ test("políticas: nascem em monitorar, simulação confere com a API e salva", a
   await page.getByRole("button", { name: "Nova política" }).click();
   const dlg = page.getByRole("dialog");
   await expect(dlg.getByLabel("Monitorar")).toBeChecked();                    // padrão seguro
-  await expect(dlg.getByLabel("Aplicar")).not.toBeChecked();
+  await expect(dlg.getByLabel("Aplicar")).toHaveCount(0);                      // PASSIVO: não existe modo aplicar
+  await expect(dlg).toContainText("passivo");
   await dlg.getByLabel("Nome", { exact: true }).fill("Teste: bloquear dados pessoais");
   await dlg.getByLabel("Ação", { exact: true }).selectOption("block");
   await dlg.getByLabel("Dados pessoais").check();
@@ -183,11 +214,18 @@ test("políticas: nascem em monitorar, simulação confere com a API e salva", a
   await expect(row).toContainText("monitorar");
   await expect(row).toContainText("Bloquear");
   await expect((await apiGet<{ mode: string; name: string }[]>(page, "v1/policies")).data.find((p) => p.name.startsWith("Teste:"))!.mode).toBe("monitor");
-  // alterar para aplicar vira versão 2 e entra na auditoria
+  // a API recusa o modo aplicar (produto passivo)
+  const polId = (await apiGet<{ id: string; name: string }[]>(page, "v1/policies")).data.find((p) => p.name.startsWith("Teste:"))!.id;
+  const refused = await page.request.put(`/api/proxy/v1/policies/${polId}`, {
+    headers: { "X-Requested-With": "promptshield", Origin: "http://127.0.0.1:3099", "Content-Type": "application/json" },
+    data: { name: "Teste: bloquear dados pessoais", action: "block", mode: "enforce", enabled: true, scope: {}, match: { categories: ["pii"] } },
+  });
+  expect(refused.status()).toBe(422);
+  // alterar a descrição vira versão 2 e entra na auditoria
   await row.getByRole("button", { name: "Editar" }).click();
-  await page.getByRole("dialog").getByLabel("Aplicar").check();
+  await page.getByRole("dialog").getByLabel("Nome", { exact: true }).fill("Teste: alertar dados pessoais");
   await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
-  await expect(page.getByTestId("policy-row").filter({ hasText: "Teste: bloquear dados pessoais" })).toContainText("aplicar");
+  await expect(page.getByTestId("policy-row").filter({ hasText: "Teste: alertar dados pessoais" })).toContainText("monitorar");
   const log = (await apiGet<{ action: string }[]>(page, "v1/audit-log?limit=20")).data;
   expect(log.filter((a) => a.action.startsWith("policy.")).length).toBeGreaterThanOrEqual(2);
 });

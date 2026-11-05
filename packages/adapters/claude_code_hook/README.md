@@ -9,10 +9,10 @@ Documentação do formato e do que foi verificado: [`docs/claude-code-hooks.md`]
 | Situação | Resultado |
 |---|---|
 | Política em **monitorar** (padrão) | a API devolve sempre `allow`: o Claude Code nunca é interrompido; a decisão hipotética fica no console |
-| Política em **aplicar**, `block` | prompt bloqueado / ferramenta negada (`deny`) |
+| Qualquer decisão (`block`, `mask`...) | **PASSIVO desde 2026-11-05:** o sensor não devolve nada ao Claude Code (nunca bloqueia, nega ou pede confirmação). Código legado de aplicação só com `PROMPTSHIELD_ENFORCEMENT=1` (sem suporte) |
 | `mask` ou `ask_justification` | em prompt: bloqueia e mostra a versão mascarada (o hook não pode reescrever o prompt); em ferramenta: pede confirmação (`ask`) |
 | API fora do ar, `fail_mode: open` | segue; grava só **metadados** em `~/.promptshield/claude-hook-spool.jsonl` (nunca o conteúdo) |
-| API fora do ar, `fail_mode: closed` | bloqueia, com mensagem |
+| API fora do ar, `fail_mode: closed` | **também segue** (passivo): o `closed` só vale no código legado |
 | Timeout da API (`timeout_seconds`, padrão 3 s), chave errada, erro interno | tratado como "API fora do ar" |
 
 O adaptador sempre termina com código 0 e JSON válido: nunca derruba o Claude Code. No fail-closed o instalador também define `onFailure: "block"` no hook (versão 2.1.295 ou mais nova), para cobrir o caso de o próprio processo travar.

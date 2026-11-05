@@ -1,6 +1,6 @@
 "use client";
 import { useId, useState, type ReactNode } from "react";
-import { ACTION_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, severityOf } from "@/lib/labels";
+import { ACTION_LABEL, ALERT_STATUS_CLASS, ALERT_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, severityOf } from "@/lib/labels";
 import { splitMasks } from "@/lib/format";
 import type { Action, Severity } from "@/lib/types";
 
@@ -70,14 +70,14 @@ export function ActionBadge({ action }: { action: Action }) {
   return <span className={`inline-block whitespace-nowrap rounded px-2 py-0.5 font-mono text-xs font-semibold ${ACTION_CLASS[action]}`}>{ACTION_LABEL[action]}</span>;
 }
 
-/** Decisão tomada e, quando a política estava em monitorar, a que teria sido tomada. */
-export function DecisionCell({ decision, would }: { decision: Action; would: Action }) {
-  return (
-    <div className="space-y-0.5">
-      <ActionBadge action={decision} />
-      {would !== decision && <div className="text-xs text-muted">teria sido: {ACTION_LABEL[would]}</div>}
-    </div>
-  );
+/** Situação do alerta do prompt (monitoramento PASSIVO: no lugar da "decisão", que não existe mais para o usuário). */
+export function AlertStatusBadge({ status }: { status: string }) {
+  return <span className={`inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs font-semibold ${ALERT_STATUS_CLASS[status] ?? "text-muted"}`} data-testid="alert-status">{ALERT_STATUS_LABEL[status] ?? status}</span>;
+}
+
+/** Faixa de severidade pelo score (0-24 baixo, 25-49 moderado, 50-69 alto, 70-100 crítico). */
+export function SeverityTag({ severity }: { severity: Severity }) {
+  return <span className={`inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs font-semibold ${SEVERITY_CLASS[severity]}`} data-testid="severity">{SEVERITY_LABEL[severity]}</span>;
 }
 
 export function Chip({ children }: { children: ReactNode }) {

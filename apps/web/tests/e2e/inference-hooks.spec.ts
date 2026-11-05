@@ -20,13 +20,6 @@ async function hookCall(apiKey: string, body: object, secret = SECRET) {
   return { status: r.status, json: (await r.json()) as { action?: string; deny_reason?: string; reference_id?: string } };
 }
 
-async function setSecretPolicy(page: Page, mode: "monitor" | "enforce") {
-  const all = (await apiGet<Record<string, unknown>[]>(page, "v1/policies")).data;
-  const p = all.find((x) => x.name === "Bloquear segredos e chaves")!;
-  const { name, description, enabled, scope, match, action } = p;
-  await mutate(page, "PUT", `v1/policies/${p.id as string}`, { name, description, enabled, scope, match, action, mode });
-}
-
 const frame = (text: string, session: string) => ({
   type: "prompt", request_id: "ignorado-o-webhook-id-vale", tenant_id: "11111111-1111-1111-1111-111111111111",
   actor: { type: "user", id: "user_e2e", email_address: "alice@example.com" }, source: { application: "claude-ai" }, session_id: session,
@@ -39,15 +32,19 @@ async function mutate(page: Page, method: "POST" | "PUT", path: string, data: un
   return r.json();
 }
 
-test("inference hooks: configurar, receber frames assinados, sombra e aplicar, números na tela", async ({ page }) => {
+test("inference hooks (PASSIVO): configurar, receber frames assinados, sempre permitir e registrar o que teria feito, números na tela", async ({ page }) => {
   await login(page, USERS.admin);
   await page.goto("/inference-hooks");
   await expect(page.getByTestId("hook-status")).toContainText("PARCIAL");
   await expect(page.getByTestId("hook-status")).toContainText("nunca foi chamado por um tenant Claude Enterprise de verdade");
   await expect(page.getByTestId("secret-state")).toContainText("Nenhum segredo configurado");
 
-  await page.getByRole("radio", { name: /Aplicar/ }).click();                    // sem segredo, aplicar é recusado
-  await expect(formAlert(page)).toContainText("configure o segredo de assinatura");
+  await expect(page.getByRole("radio", { name: /Aplicar/ })).toHaveCount(0);       // o produto é passivo: não existe modo aplicar na tela...
+  await expect(page.getByText(/Não existe modo aplicar/)).toBeVisible();
+  const refused = await page.request.fetch("/api/proxy/v1/inference-hook/config", { method: "PUT", data: { mode: "enforce" },
+    headers: { "X-Requested-With": "promptshield", Origin: WEB, "Content-Type": "application/json" } });
+  expect(refused.status()).toBe(422);                                              // ...nem na API
+  expect((await refused.json()).detail).toContain("passivo");
 
   await page.getByLabel(/Cole o segredo/).fill("whsec_isto-nao-e-base64!!");
   await page.getByRole("button", { name: "Guardar segredo" }).click();
@@ -67,17 +64,8 @@ test("inference hooks: configurar, receber frames assinados, sombra e aplicar, n
   expect(events[0].masked_text).not.toContain(AWS);
   expect([events[0].decision, events[0].would_decide]).toEqual(["allow", "block"]); // política em monitorar: grava o que teria feito
 
-  await setSecretPolicy(page, "enforce");
-  await page.reload();
-  await page.getByRole("radio", { name: /Aplicar/ }).click();
-  await expect(page.getByRole("status")).toHaveText("Configuração salva.");
-
-  const denied = await hookCall(key, frame(`outra chave ${AWS}`, "s2"));
-  expect(denied.status).toBe(200);
-  expect(denied.json.action).toBe("deny");
-  expect(denied.json.deny_reason).toContain("segredo");
-  expect(denied.json.deny_reason).not.toContain(AWS);
-  expect(denied.json.reference_id).toMatch(/^ps:[0-9a-f]{32}$/);
+  const again = await hookCall(key, frame(`outra chave ${AWS}`, "s2"));
+  expect(again).toEqual({ status: 200, json: { action: "allow" } });               // PASSIVO: mesmo com a política indicando bloqueio, o veredito é sempre allow
   const unknownType = await hookCall(key, { ...frame("x", "s3"), type: "response" });
   expect(unknownType.json).toEqual({ action: "allow" });                           // tipo futuro: permitir, nunca erro
 
@@ -85,22 +73,20 @@ test("inference hooks: configurar, receber frames assinados, sombra e aplicar, n
   const kpi = (label: string) => page.getByTestId("kpi").filter({ hasText: label }).locator("div").first();
   const cfg = (await apiGet<{ stats_24h: { requests: number; denied: number; would_deny: number; p95_ms: number } }>(page, "v1/inference-hook/config")).data;
   expect(cfg.stats_24h.requests).toBe(3);
-  expect(cfg.stats_24h.denied).toBe(1);
+  expect(cfg.stats_24h.denied).toBe(0);                                            // nada é negado
+  expect(cfg.stats_24h.would_deny).toBeGreaterThanOrEqual(2);                      // mas o que a política indicaria fica registrado
   await expect(kpi("Requisições (24 h)")).toHaveText("3");
-  await expect(kpi("Negadas")).toHaveText("1");
+  await expect(kpi("Negadas")).toHaveText("0");
   await expect(kpi("p95 do nosso tempo")).toHaveText(`${cfg.stats_24h.p95_ms} ms`);
 
   await expectAccessible(page, "/inference-hooks");
-  await page.getByRole("radio", { name: /Sombra/ }).click();                         // volta ao padrão seguro
-  await expect(page.getByRole("status")).toHaveText("Configuração salva.");
-  await setSecretPolicy(page, "monitor");
 });
 
 test("inference hooks: analista vê, mas não altera; leitura não vê", async ({ page }) => {
   await login(page, USERS.analista);
   await page.goto("/inference-hooks");
   await expect(page.getByText("Só o administrador altera a configuração.")).toBeVisible();
-  await expect(page.getByRole("radio", { name: /Aplicar/ })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: /Sombra/ })).toBeDisabled();
   await expect(page.getByRole("button", { name: /segredo/i })).toHaveCount(0);
   await logout(page);
   await login(page, USERS.leitura);

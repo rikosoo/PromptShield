@@ -68,6 +68,8 @@ function Frame({ children }: { children: ReactNode }) {
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-panel px-4 py-3 md:px-6">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-semibold" data-testid="tenant-name">{tenant.name}</span>
+            <span data-testid="passive-badge" title="O PromptShield só observa, analisa, registra e alerta. Nunca bloqueia, altera ou interrompe um prompt."
+              className="rounded-full border border-line px-2 py-0.5 font-mono text-xs text-muted">monitoramento passivo</span>
             {tenant.is_demo && (
               <span data-testid="demo-badge" className="rounded-full border border-med bg-med-bg px-2 py-0.5 font-mono text-xs text-med">dados de exemplo</span>
             )}

@@ -115,6 +115,9 @@ def put_config(body: ConfigPatch, p: Annotated[Principal, Depends(require_roles(
         cfg = _get_or_create(s, p.tenant_id)
         before = {"mode": cfg.mode, "scope": cfg.scope, "evaluate_tool_calls": cfg.evaluate_tool_calls}
         data = body.model_dump(exclude_unset=True)
+        if data.get("mode") == "enforce" and settings.passive_only:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "modo aplicar indisponível: o PromptShield é passivo (observa, analisa, registra e alerta; nunca nega nem altera um prompt)")
         if data.get("mode") == "enforce" and cfg.secret_ciphertext is None:
             raise HTTPException(status.HTTP_409_CONFLICT, "configure o segredo de assinatura antes de aplicar vereditos")
         for k, v in data.items():

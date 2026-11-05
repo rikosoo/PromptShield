@@ -58,6 +58,7 @@ class Tenant(Base):
     pilot_expected_users: Mapped[int | None] = mapped_column(Integer)
     pilot_days: Mapped[int] = mapped_column(Integer, default=30)
     omit_text_categories: Mapped[list[str]] = mapped_column(ARRAY(String), default=lambda: ["saude"])
+    risk_weights: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)      # peso (0 a 100) por categoria, definido pela empresa
     monitored_domains: Mapped[list[str]] = mapped_column(ARRAY(String), default=lambda: ["chatgpt.com", "claude.ai", "gemini.google.com", "copilot.microsoft.com", "copilot.com"])
 
 
@@ -173,6 +174,8 @@ class Analysis(Base):
     would_decide: Mapped[str] = mapped_column(String(20))
     policy_hits: Mapped[list[Any]] = mapped_column(JSON)
     score_version: Mapped[str] = mapped_column(String(40))
+    findings: Mapped[list[Any]] = mapped_column(JSON, default=list)          # achados (tipo, categoria, confiança, regra, evidência MASCARADA)
+    engine_version: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = _ts()
 
 

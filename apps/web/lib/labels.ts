@@ -1,6 +1,6 @@
 import type { Action, IncidentStatus, Severity } from "./types";
 
-export const SEVERITY_LABEL: Record<Severity, string> = { baixo: "Baixo", medio: "Médio", alto: "Alto", critico: "Crítico" };
+export const SEVERITY_LABEL: Record<Severity, string> = { baixo: "Baixo", medio: "Moderado", alto: "Alto", critico: "Crítico" };
 export const SEVERITY_CLASS: Record<Severity, string> = {
   baixo: "bg-low-bg text-low", medio: "bg-med-bg text-med", alto: "bg-high-bg text-high", critico: "bg-crit-bg text-crit",
 };
@@ -18,7 +18,7 @@ export const appLabel = (a: string) => APP_LABEL[a] ?? a;
 
 /** Severidade a partir do score (mesma régua da API: 80+ crítico, 60+ alto, 30+ médio). */
 export function severityOf(score: number): Severity {
-  return score >= 80 ? "critico" : score >= 60 ? "alto" : score >= 30 ? "medio" : "baixo";
+  return score >= 70 ? "critico" : score >= 50 ? "alto" : score >= 25 ? "medio" : "baixo";     // mesmas faixas do motor: 0-24, 25-49, 50-69, 70-100
 }
 
 export const CHANNEL_LABEL: Record<string, string> = {
@@ -40,7 +40,17 @@ export const INTENT_LABEL: Record<string, string> = {
 };
 export const intentLabel = (i: string) => INTENT_LABEL[i] ?? i;
 /** Tipos de trecho sensível que o motor reconhece; o que não está aqui aparece com o nome técnico. */
+export const ALERT_STATUS_LABEL: Record<string, string> = {
+  sem_alerta: "Sem alerta", novo: "Novo", em_analise: "Em análise", falso_positivo: "Falso positivo", resolvido: "Resolvido",
+};
+export const ALERT_STATUS_CLASS: Record<string, string> = {
+  sem_alerta: "text-muted", novo: "bg-med-bg text-med", em_analise: "bg-med-bg text-med", falso_positivo: "bg-low-bg text-low", resolvido: "bg-low-bg text-low",
+};
+/** Nível de alerta (passivo: nenhum nível bloqueia, altera ou interrompe nada). */
+export const ALERT_LEVEL_LABEL: Record<string, string> = { informational: "Informativo", attention: "Atenção", high: "Alto", critical: "Crítico" };
 export const SPAN_LABEL: Record<string, string> = {
+  declared_token: "Token ou chave", agencia: "Agência bancária", conta_bancaria: "Conta bancária", cartao: "Cartão", cvv: "CVV", pix: "Chave Pix",
+  private_key_body: "Chave privada", promptshield_key: "Chave do PromptShield", promptshield_enroll_token: "Token de matrícula do PromptShield", high_entropy: "Valor secreto",
   aws_access_key: "Chave AWS", cpf: "CPF", cnpj: "CNPJ", email: "E-mail", phone: "Telefone", card: "Cartão", conn_string: "String de conexão",
   ip: "Endereço IP", internal_host: "Host interno", user_path: "Usuário em caminho de arquivo", private_key: "Chave privada", jwt: "Token JWT", github_token: "Token do GitHub", password: "Senha",
 };

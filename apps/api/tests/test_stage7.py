@@ -277,7 +277,7 @@ def test_email_without_smtp_fails_clearly_and_with_smtp_sends(client, world, mon
     world.sql("UPDATE notification_outbox SET next_attempt_at = now() - interval '1 second'")
     assert worker.run_once()["sent"] == 1
     srv.shutdown()
-    assert "To: soc@empresa.com" in got[0] and "Subject: [PromptShield] alto" in got[0] and SECRET not in got[0]
+    assert "To: soc@empresa.com" in got[0] and "Subject: [PromptShield] critico" in got[0] and SECRET not in got[0]
 
 
 @pytest.mark.db

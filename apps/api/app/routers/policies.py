@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 
 from app import audit, governance
+from app.config import settings
 from app.db import tenant_session
 from app.models import Analysis, Event, Policy
 from app.policy_engine import RANK, PolicySpec, Subject, evaluate
@@ -33,8 +34,16 @@ def list_policies(p: Annotated[Principal, Depends(require_roles(*READ_ROLES))]) 
         return [_out(x) for x in s.execute(select(Policy).order_by(Policy.name)).scalars()]
 
 
+def _passive_guard(mode: str) -> None:
+    """O PromptShield é passivo: não existe modo "aplicar". Recusar é mais honesto do que aceitar e não fazer nada."""
+    if mode == "enforce" and settings.passive_only:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "modo aplicar indisponível: o PromptShield é passivo (observa, analisa, registra e alerta; nunca bloqueia nem altera um prompt)")
+
+
 @router.post("", response_model=PolicyOut, status_code=201, summary="Cria política (nasce em modo monitor por padrão)")
 def create_policy(body: PolicyIn, p: Annotated[Principal, Depends(require_roles("admin"))]) -> PolicyOut:
+    _passive_guard(body.mode)
     with tenant_session(p.tenant_id) as s:
         pol = Policy(tenant_id=p.tenant_id, **body.model_dump())
         s.add(pol)
@@ -46,6 +55,7 @@ def create_policy(body: PolicyIn, p: Annotated[Principal, Depends(require_roles(
 
 @router.put("/{policy_id}", response_model=PolicyOut, summary="Altera política (grava auditoria com antes e depois)")
 def update_policy(policy_id: uuid.UUID, body: PolicyIn, p: Annotated[Principal, Depends(require_roles("admin"))]) -> PolicyOut:
+    _passive_guard(body.mode)
     with tenant_session(p.tenant_id) as s:
         pol = s.get(Policy, policy_id)
         if pol is None:

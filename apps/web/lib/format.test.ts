@@ -18,6 +18,6 @@ describe("formatação", () => {
     expect(pct(0.974)).toBe("97%");
   });
   it("severidade segue a régua da API", () => {
-    expect([0, 29, 30, 59, 60, 79, 80, 100].map(severityOf)).toEqual(["baixo", "baixo", "medio", "medio", "alto", "alto", "critico", "critico"]);
+    expect([0, 24, 25, 49, 50, 69, 70, 100].map(severityOf)).toEqual(["baixo", "baixo", "medio", "medio", "alto", "alto", "critico", "critico"]);   // faixas do motor 2.0: 0-24, 25-49, 50-69, 70-100
   });
 });

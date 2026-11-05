@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from promptshield_detection.scoring import HIGH_RISK_MIN
 from promptshield_detection.taxonomy import load as load_taxonomy
 from sqlalchemy import text
 
@@ -12,7 +13,10 @@ from app.db import tenant_session
 from app.security import READ_ROLES, Principal, require_roles
 
 router = APIRouter(prefix="/v1", tags=["painel"])
-HIGH = 60
+HIGH = HIGH_RISK_MIN      # faixa "alto" (50) em diante
+ALERT_MIN = 25            # a partir daqui (faixa "moderado") o prompt gera pelo menos um alerta de atenção
+INJECTION_IDS = ["injection_direta", "injection_indireta", "jailbreak", "extracao_system_prompt"]   # vão ao banco como parâmetro, nunca no texto do SQL
+
 
 
 def window_start(days: int) -> datetime:
@@ -36,7 +40,7 @@ def compute_overview(s, since: datetime, until: datetime | None = None) -> dict:
     if until is None:
         tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
         until = datetime(tomorrow.year, tomorrow.month, tomorrow.day, tzinfo=timezone.utc)
-    prm = {"hi": HIGH, "since": since, "until": until}
+    prm = {"hi": HIGH, "since": since, "until": until, "alert": ALERT_MIN, "c_sec": ["segredo"], "c_pii": ["pii"], "c_fin": ["financeiro"], "c_inj": INJECTION_IDS}
     row = s.execute(text("""
         SELECT count(*) AS events,
                count(*) FILTER (WHERE a.risk_score >= :hi) AS high_risk,
@@ -45,6 +49,11 @@ def compute_overview(s, since: datetime, until: datetime | None = None) -> dict:
                count(*) FILTER (WHERE (a.flags::jsonb)->>'is_agent_action' = 'true') AS agent_actions,
                count(*) FILTER (WHERE a.decision = 'block') AS blocked,
                count(*) FILTER (WHERE a.would_decide = 'block' AND a.decision <> 'block') AS would_block,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(a.categories::jsonb) c WHERE c->>'id' = ANY(:c_sec) AND (c->>'confidence')::float >= 0.5)) AS credentials,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(a.categories::jsonb) c WHERE c->>'id' = ANY(:c_pii) AND (c->>'confidence')::float >= 0.5)) AS personal_data,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(a.categories::jsonb) c WHERE c->>'id' = ANY(:c_fin) AND (c->>'confidence')::float >= 0.5)) AS financial_data,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(a.categories::jsonb) c WHERE c->>'id' = ANY(:c_inj) AND (c->>'confidence')::float >= 0.5)) AS injections,
+               count(*) FILTER (WHERE a.risk_score >= :alert) AS alerts,
                count(DISTINCT e.user_id) AS users
         FROM events e JOIN analyses a ON a.event_pk = e.id WHERE e.occurred_at >= :since AND e.occurred_at < :until"""), prm).mappings().one()
     daily = {r.d: (r.total, r.high) for r in s.execute(text("""
@@ -58,8 +67,18 @@ def compute_overview(s, since: datetime, until: datetime | None = None) -> dict:
         GROUP BY 1 ORDER BY 3 DESC, 2 DESC, 1"""), prm).mappings().all()
     by_app = s.execute(text("""
         SELECT e.app, count(*) FILTER (WHERE NOT e.personal_account) AS corporate,
-               count(*) FILTER (WHERE e.personal_account) AS personal
-        FROM events e WHERE e.occurred_at >= :since AND e.occurred_at < :until GROUP BY 1 ORDER BY count(*) DESC, 1"""), prm).mappings().all()
+               count(*) FILTER (WHERE e.personal_account) AS personal,
+               count(*) FILTER (WHERE (a.flags::jsonb)->>'has_sensitive' = 'true') AS sensitive
+        FROM events e JOIN analyses a ON a.event_pk = e.id WHERE e.occurred_at >= :since AND e.occurred_at < :until GROUP BY 1 ORDER BY count(*) DESC, 1"""), prm).mappings().all()
+    top_users = s.execute(text("""
+        SELECT e.user_id, count(*) AS alerts, max(a.risk_score) AS max_score
+        FROM events e JOIN analyses a ON a.event_pk = e.id
+        WHERE e.occurred_at >= :since AND e.occurred_at < :until AND a.risk_score >= :alert
+        GROUP BY 1 ORDER BY 2 DESC, 3 DESC, 1 LIMIT 5"""), prm).mappings().all()
+    monthly = s.execute(text("""
+        SELECT to_char(date_trunc('month', e.occurred_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS month, count(*) AS events,
+               count(*) FILTER (WHERE a.risk_score >= :alert) AS alerts, count(*) FILTER (WHERE a.risk_score >= :hi) AS high_risk
+        FROM events e JOIN analyses a ON a.event_pk = e.id WHERE e.occurred_at >= :since AND e.occurred_at < :until GROUP BY 1 ORDER BY 1"""), prm).mappings().all()
     first = since.date()
     last = (until - timedelta(microseconds=1)).date()
     series = []
@@ -69,7 +88,8 @@ def compute_overview(s, since: datetime, until: datetime | None = None) -> dict:
         series.append({"date": d.isoformat(), "events": total, "high_risk": high})
         d += timedelta(days=1)
     return {"high_risk_threshold": HIGH, "totals": dict(row), "daily": series,
-            "by_department": [dict(r) for r in by_dept], "by_app": [dict(r) for r in by_app]}
+            "by_department": [dict(r) for r in by_dept], "by_app": [dict(r) for r in by_app],
+            "top_users": [dict(r) for r in top_users], "monthly": [dict(r) for r in monthly], "alert_min": ALERT_MIN}
 
 
 @router.get("/stats/overview", summary="Indicadores, série diária de alto risco, departamentos e ferramentas")

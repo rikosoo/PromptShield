@@ -1,7 +1,17 @@
-"""Decisão da API -> resposta no formato do Claude Code (ver docs/claude-code-hooks.md)."""
+"""Decisão da API -> resposta no formato do Claude Code (ver docs/claude-code-hooks.md).
+
+O PromptShield é PASSIVO: o sensor observa e envia; NUNCA bloqueia, pede confirmação, altera o prompt nem interrompe a ferramenta de IA, nem quando
+a API cai (falha sempre aberta). O código de aplicação abaixo é LEGADO e só roda com PROMPTSHIELD_ENFORCEMENT=1 (usado pelos testes antigos);
+não é um modo suportado do produto.
+"""
 from __future__ import annotations
 
+import os
 from typing import Any
+
+
+def passive() -> bool:
+    return os.environ.get("PROMPTSHIELD_ENFORCEMENT") != "1"
 
 CATEGORY_NAMES = {
     "pii": "dados pessoais", "financeiro": "dados financeiros", "segredo": "credenciais ou segredos",
@@ -19,7 +29,7 @@ def _why(result: dict[str, Any]) -> str:
 def render(hook_event: str, result: dict[str, Any]) -> dict[str, Any] | None:
     """Devolve o JSON de saída, ou None para seguir sem interferir. Em monitorar a API devolve sempre allow."""
     decision = result.get("decision", "allow")
-    if decision in ("allow", "alert"):
+    if passive() or decision in ("allow", "alert"):
         return None
     why = _why(result)
     masked = result.get("masked_text", "")
@@ -44,7 +54,7 @@ def _pre(kind: str, reason: str) -> dict[str, Any]:
 
 def render_failure(hook_event: str, fail_mode: str, reason: str) -> dict[str, Any] | None:
     """API indisponível ou erro no adaptador: fail-open segue; fail-closed bloqueia."""
-    if fail_mode != "closed":
+    if passive() or fail_mode != "closed":
         return None
     msg = f"PromptShield não conseguiu inspecionar ({reason}). Política da empresa: bloquear quando a inspeção falha."
     if hook_event == "PreToolUse":
@@ -56,7 +66,7 @@ def render_copilot(event_name: str, result: dict[str, Any]) -> dict[str, Any] | 
     """Copilot CLI (camelCase): preToolUse devolve permissionDecision plano. userPromptSubmitted NÃO bloqueia (a saída de hook de
     comando é descartada para esse evento), então só monitora."""
     decision = result.get("decision", "allow")
-    if event_name != "preToolUse" or decision in ("allow", "alert"):
+    if passive() or event_name != "preToolUse" or decision in ("allow", "alert"):
         return None
     why = _why(result)
     if decision == "block":
@@ -65,7 +75,7 @@ def render_copilot(event_name: str, result: dict[str, Any]) -> dict[str, Any] | 
 
 
 def render_copilot_failure(event_name: str, fail_mode: str, reason: str) -> dict[str, Any] | None:
-    if fail_mode != "closed" or event_name != "preToolUse":
+    if passive() or fail_mode != "closed" or event_name != "preToolUse":
         return None
     return {"permissionDecision": "deny",
             "permissionDecisionReason": f"PromptShield não conseguiu inspecionar ({reason}). Política da empresa: bloquear quando a inspeção falha."}

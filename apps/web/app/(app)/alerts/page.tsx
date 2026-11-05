@@ -76,7 +76,7 @@ export default function AlertsPage() {
         {alerts.error && <ErrorBox message={alerts.error} onRetry={alerts.reload} />}
         {alerts.loading && !alerts.data && <Loading />}
         {alerts.data && (alerts.data.length === 0 ? <Empty>Nenhum alerta no período.</Empty> : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[46rem] border-collapse" data-testid="alerts-table">
               <caption className="sr-only">Alertas</caption>
               <thead><tr><th scope="col" className="th">Severidade</th><th scope="col" className="th">Alerta</th><th scope="col" className="th">Usuário</th><th scope="col" className="th">Ocorrências</th><th scope="col" className="th">Última</th><th scope="col" className="th"><span className="sr-only">Incidente</span></th></tr></thead>
@@ -98,7 +98,7 @@ export default function AlertsPage() {
         {!isAdmin && <p className="text-sm text-muted">Só o administrador configura canais.</p>}
         {isAdmin && channels.error && <ErrorBox message={channels.error} onRetry={channels.reload} />}
         {isAdmin && channels.data && (channels.data.length === 0 ? <Empty>Nenhum canal. Sem canais, alertas ficam só no console.</Empty> : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[46rem] border-collapse" data-testid="channels-table">
               <caption className="sr-only">Canais</caption>
               <thead><tr><th scope="col" className="th">Canal</th><th scope="col" className="th">Destino</th><th scope="col" className="th">Filtro</th><th scope="col" className="th">Fila</th><th scope="col" className="th"><span className="sr-only">Ações</span></th></tr></thead>
