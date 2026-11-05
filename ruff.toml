@@ -1,0 +1,11 @@
+# Análise estática de segurança para o resto do repositório (a API tem a própria configuração em apps/api/pyproject.toml)
+line-length = 130
+
+[lint]
+select = ["S"]  # só segurança: estilo e imports ficam com a configuração de cada pacote
+ignore = ["S101"]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106", "S108", "S311", "S603", "S607", "S608"]
+"**/scripts/**" = ["S105", "S106", "S311", "S603", "S607"]
+"tests/fixtures/**" = ["S105", "S106", "S311"]

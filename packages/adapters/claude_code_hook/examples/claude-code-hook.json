@@ -1,0 +1,8 @@
+{
+  "api_url": "https://api.seu-dominio.exemplo",
+  "api_key": "ps_XXXXXXXX_coloque-a-chave-do-coletor-aqui",
+  "fail_mode": "open",
+  "timeout_seconds": 3,
+  "integration_status": "partial",
+  "department": "Engenharia"
+}

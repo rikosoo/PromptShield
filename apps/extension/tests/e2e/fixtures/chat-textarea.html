@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Chat de teste com textarea (simulado)</title>
+<textarea id="prompt" rows="3" aria-label="Prompt"></textarea>
+<button id="send" type="button">Enviar</button>
+<script>
+  window.__sent = [];
+  const prompt = document.getElementById("prompt");
+  function doSend() { const t = prompt.value.trim(); if (!t) return; window.__sent.push(t); prompt.value = ""; }
+  document.getElementById("send").addEventListener("click", doSend);
+  prompt.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSend(); } });
+</script>

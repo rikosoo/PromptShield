@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "api_url": { "title": "URL da API do PromptShield (https)", "type": "string" },
+    "api_key": { "title": "Chave de API do coletor (escopo ingest)", "type": "string" },
+    "user_id": { "title": "Identificador do usuário quando o perfil do navegador não informa e-mail", "type": "string" },
+    "department": { "title": "Departamento", "type": "string" },
+    "domains": { "title": "Domínios monitorados (restringe a lista embutida)", "type": "array", "items": { "type": "string" } },
+    "policy_url": { "title": "Endereço da política de uso de IA (https)", "type": "string" },
+    "fail_mode": { "title": "Se a API estiver fora do ar: open permite, closed bloqueia", "type": "string", "enum": ["open", "closed"] },
+    "timeout_ms": { "title": "Tempo máximo de espera pela API, em milissegundos", "type": "integer", "minimum": 500, "maximum": 15000 }
+  }
+}

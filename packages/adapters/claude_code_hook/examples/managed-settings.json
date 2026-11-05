@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "/usr/local/lib/promptshield/promptshield-claude-hook", "args": [], "timeout": 10 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "/usr/local/lib/promptshield/promptshield-claude-hook", "args": [], "timeout": 10 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "/usr/local/lib/promptshield/promptshield-claude-hook", "args": [], "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

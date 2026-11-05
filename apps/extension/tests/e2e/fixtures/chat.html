@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Chat de teste (simulado)</title>
+<h1>Chat de teste (simulado)</h1>
+<div id="prompt" contenteditable="true" role="textbox" aria-label="Prompt" style="border:1px solid #888;min-height:60px;padding:6px"></div>
+<button id="send" type="button">Enviar</button>
+<input id="file" type="file" multiple aria-label="Anexar arquivo">
+<ul id="sent"></ul>
+<script>
+  // Imita o comportamento do site: envia ao clicar em Enviar ou ao apertar Enter. Registra o que foi "enviado".
+  window.__sent = [];
+  const prompt = document.getElementById("prompt");
+  function doSend() {
+    const t = prompt.innerText.trim();
+    if (!t) return;
+    window.__sent.push(t);
+    const li = document.createElement("li");
+    li.textContent = t;
+    document.getElementById("sent").append(li);
+    prompt.textContent = "";
+  }
+  document.getElementById("send").addEventListener("click", doSend);
+  prompt.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSend(); } });
+</script>

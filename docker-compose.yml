@@ -1,0 +1,127 @@
+# Sobe tudo com: make up   (veja o README)
+services:
+  db:
+    restart: unless-stopped
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-promptshield}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-promptshield}
+    ports: ["127.0.0.1:5432:5432"]   # o banco nunca é exposto
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-promptshield}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://promptshield_app:${APP_DB_PASSWORD:?defina no .env}@db:5432/${POSTGRES_DB:-promptshield}
+      ADMIN_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptshield}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-promptshield}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      OIDC_MODE: ${OIDC_MODE:-off}
+      OIDC_MOCK_SECRET: ${OIDC_MOCK_SECRET:-}
+      ORIGINAL_TEXT_MASTER_KEY: ${ORIGINAL_TEXT_MASTER_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      CONSOLE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      # licenciamento on-premise (docs/licenciamento.md); off = nada muda
+      LICENSE_MODE: ${LICENSE_MODE:-off}
+      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-}
+      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
+      LICENSE_ALLOW_HTTP: ${LICENSE_ALLOW_HTTP:-false}
+    volumes: ["licensedata:/var/lib/promptshield"]   # chave privada da instalação (precisa persistir)
+    ports: ["${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    # entrega alertas e SIEM e gera relatórios agendados; usa o papel restrito (RLS), sem migrar
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://promptshield_app:${APP_DB_PASSWORD:?defina no .env}@db:5432/${POSTGRES_DB:-promptshield}
+      ORIGINAL_TEXT_MASTER_KEY: ${ORIGINAL_TEXT_MASTER_KEY:-}
+      CONSOLE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-promptshield@localhost}
+      LICENSE_MODE: ${LICENSE_MODE:-off}
+      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-}
+      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
+      LICENSE_ALLOW_HTTP: ${LICENSE_ALLOW_HTTP:-false}
+    volumes: ["licensedata:/var/lib/promptshield"]   # o worker renova a licença com a mesma identidade da API
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    restart: unless-stopped
+    build: ./apps/web
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      AUTH_MODE: ${AUTH_MODE:-oidc}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+    ports: ["${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ---- SÓ DO FORNECEDOR (perfil "vendor"): serviço de licenças. Não sobe com `docker compose up`; use `docker compose --profile vendor up -d licensing`.
+  licensing-db:
+    profiles: ["vendor"]
+    restart: unless-stopped
+    image: postgres:16
+    environment:
+      POSTGRES_USER: licensing
+      POSTGRES_PASSWORD: ${LICENSING_DB_PASSWORD:-}
+      POSTGRES_DB: licensing
+    volumes: ["licensingdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U licensing"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  licensing:
+    profiles: ["vendor"]
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: apps/licensing/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://licensing:${LICENSING_DB_PASSWORD:-}@licensing-db:5432/licensing
+      LICENSE_SIGNING_KEY: ${LICENSE_SIGNING_KEY:-}
+    ports: ["${LICENSING_BIND:-127.0.0.1}:${LICENSING_PORT:-8100}:8100"]
+    depends_on:
+      licensing-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8100/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  licensedata:
+  licensingdata:
+  pgdata:

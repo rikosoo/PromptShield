@@ -1,0 +1,115 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 3s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e "packages/detection[dev,ner]" -e "packages/adapters/inference_hooks[dev]" -e "packages/licensing[dev]" && pip install -e "apps/licensing[dev]" && pip install -e "apps/api[dev]" -e "packages/adapters/claude_code_hook[dev]"
+      - run: >-
+          pip install
+          https://github.com/explosion/spacy-models/releases/download/pt_core_news_sm-3.8.0/pt_core_news_sm-3.8.0-py3-none-any.whl
+          https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+      - run: ruff check apps/api apps/licensing packages/detection packages/adapters packages/licensing
+      - run: ruff check --config ruff.toml packages
+      - run: cd apps/api && pytest -q
+        env:
+          DATABASE_URL_TEST: postgresql+psycopg://ci:ci@localhost:5432/ci
+      - name: Testes de segurança (controle de acesso, limite de requisições, chaves, logs)
+        run: cd apps/api && pytest -q -m security
+        env:
+          DATABASE_URL_TEST: postgresql+psycopg://ci:ci@localhost:5432/ci
+      - run: cd packages/detection && pytest -q
+      - run: cd packages/licensing && pytest -q
+      - name: Serviço de licenças (banco real)
+        run: cd apps/licensing && pytest -q
+        env:
+          DATABASE_URL_TEST: postgresql+psycopg://ci:ci@localhost:5432/ci
+      - run: cd packages/adapters/claude_code_hook && pytest -q
+      - run: cd packages/adapters/inference_hooks && pytest -q
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+  extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build:dev
+      - run: npm run build:sideload
+      - run: npm audit --omit=dev --audit-level=high
+  dependencies:
+    # varredura de dependências Python (pip-audit usa a base de avisos do PyPI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e packages/detection -e packages/adapters/inference_hooks -e packages/licensing && pip install -e apps/licensing && pip install -e apps/api pip-audit
+      - run: pip-audit --skip-editable
+  secrets:
+    # nenhum .env, chave privada ou token real no repositório (só .env.example)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest && pytest -q tests/test_repo_hygiene.py
+  compose:
+    # fumaça do docker compose: constrói as imagens, sobe tudo, cria tenant e envia um evento sintético
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: .env descartável (login mock, só neste job)
+        run: |
+          cp .env.example .env
+          sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 16)/; s/^APP_DB_PASSWORD=.*/APP_DB_PASSWORD=$(openssl rand -hex 16)/; s/^OIDC_MODE=.*/OIDC_MODE=mock/; s/^OIDC_MOCK_SECRET=.*/OIDC_MOCK_SECRET=$(openssl rand -hex 32)/" .env
+      - run: docker compose up --build -d --wait --wait-timeout 300
+      - name: tenant e evento sintético
+        run: |
+          out="$(docker compose exec -T api python -m app.cli create-tenant --name CI --slug ci --admin-email ci@exemplo.example)"
+          key="$(echo "$out" | grep -o 'ps_[A-Za-z0-9_-]*' | head -1)"
+          test -n "$key"
+          curl -fsS -X POST http://localhost:8000/v1/events -H "X-API-Key: $key" -H "Content-Type: application/json" -d '{"event_id":"7d1f6d0e-3b5e-4f3a-9c55-0a1b2c3d4e5f","occurred_at":"2026-10-14T12:00:00Z","source":{"channel":"browser","app":"chatgpt_web","integration_status":"experimental"},"actor":{"user_id":"sintetico"},"kind":"prompt","content":{"text":"SIMULADO: CPF 529.982.247-25"}}' | tee /dev/stderr | grep -q '"pii"'
+          curl -fsS -o /dev/null http://localhost:3000/login
+          curl -fsS http://localhost:8000/sensor/extension-manifest.json | grep -q sha256   # a imagem da API construiu e embalou a extensão
+          curl -fsS http://localhost:8000/sensor/install.sh | head -1 | grep -q '^#!/bin/sh'
+      - if: failure()
+        run: docker compose logs --no-color | tail -200
