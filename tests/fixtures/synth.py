@@ -56,6 +56,10 @@ def make(kind: str, n: int) -> str:
         return "dop_v1_" + _s(r, 64, "0123456789abcdef")
     if kind == "slackhook":
         return "https://hooks.slack.com/services/T" + _s(r, 10, _UP) + "/B" + _s(r, 10, _UP) + "/" + _s(r, 24)
+    if kind == "psk":      # chave de API do próprio PromptShield: ps_<8 hex>_<32 caracteres urlsafe>
+        return "ps_" + _s(r, 8, "0123456789abcdef") + "_" + _s(r, 32, _AN + "_-")
+    if kind == "pse":      # token de matrícula do PromptShield
+        return "pse_" + _s(r, 8, "0123456789abcdef") + "_" + _s(r, 32, _AN + "_-")
     if kind == "awsdoc":   # a chave de EXEMPLO da documentação da AWS (pública): montada na hora para não aparecer em arquivo
         return "AKIA" + "IOSFODNN7" + "EXAMPLE"
     if kind == "pwd":

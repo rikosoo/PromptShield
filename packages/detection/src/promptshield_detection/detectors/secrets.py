@@ -40,6 +40,9 @@ RULES: list[tuple[re.Pattern[str], str, str, float, str]] = [
     (re.compile(r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]{20,}"), "slack_webhook", "Webhook do Slack", 0.95, "https://hooks.slack.com/****"),
     (re.compile(r"https://(?:discord(?:app)?\.com)/api/webhooks/\d+/[A-Za-z0-9_\-]{40,}"), "discord_webhook", "Webhook do Discord", 0.95, "https://discord.com/****"),
     (re.compile(r"(?i)\bbearer\s+([A-Za-z0-9._~+/=\-]{24,})"), "bearer_token", "Token Bearer", 0.85, "****"),
+    # credenciais do próprio PromptShield: chave de API da máquina (ps_<8 hex>_<token>) e token de matrícula (pse_<8 hex>_<token>)
+    (re.compile(r"\bps_[0-9a-f]{8}_[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])"), "promptshield_key", "Chave de API do PromptShield", 0.97, "ps_****"),
+    (re.compile(r"\bpse_[0-9a-f]{8}_[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])"), "promptshield_enroll_token", "Token de matrícula do PromptShield", 0.95, "pse_****"),
 ]
 CONN_RE = re.compile(r"(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*+://([^\s:@/]+):([^\s@/]{3,})@[^\s]+", re.I)
 KEYWORD_RE = re.compile(

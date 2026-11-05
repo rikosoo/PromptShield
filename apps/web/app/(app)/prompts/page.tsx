@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Attachments } from "@/components/Attachments";
 import { PromptDetailDialog } from "@/components/PromptDetail";
-import { Chip, DecisionCell, Empty, ErrorBox, Loading, MaskedText, Pager, Panel, RiskBar } from "@/components/ui";
+import { Chip, Collapsible, DecisionCell, Empty, ErrorBox, Loading, MaskedText, Pager, Panel, RiskBar } from "@/components/ui";
 import { api, apiPage, qs, useLoad } from "@/lib/api";
 import { clip, when } from "@/lib/format";
 import { APP_LABEL, appLabel, intentLabel, KIND_LABEL, spanLabel } from "@/lib/labels";
@@ -49,6 +49,14 @@ export default function PromptsPage() {
   const pick = (set: (v: string) => void, cur: string, v: string) => { set(cur === v ? "" : v); setPage(0); };
   const chipBtn = (on: boolean) => `rounded border px-2 py-1 text-xs ${on ? "border-accent bg-accent text-accent-fg" : "border-line bg-panel hover:bg-panel2"}`;
 
+  const totalCats = groups.reduce((n, g) => n + g.items.length, 0);
+  const catSummary = category ? `Filtrando por ${name(category)}` : counts.data ? `${Object.values(counts.data).filter((n) => n > 0).length} de ${totalCats} categorias com eventos` : "carregando…";
+  const sigActive = [spanType && spanLabel(spanType), intent && intentLabel(intent), kind && (KIND_LABEL[kind] ?? kind)].filter(Boolean);
+  const sigTop = signals.data ? Object.entries(signals.data.span_types).slice(0, 4).map(([k, n]) => `${spanLabel(k)} ${n}`) : [];
+  const sigSummary = sigActive.length ? `Filtrando por ${sigActive.join(", ")}` : signals.data ? (sigTop.join(" · ") || "nenhum trecho sensível no período") : "carregando…";
+  const filterParts = [searchApplied && `busca “${searchApplied}”`, sessionId && "uma sessão", code && "contém código", sensitive && "dado sensível", agent && "ação de agente", blocked && "só bloqueados", onlyRisk && "só com risco", live && "atualiza sozinho"].filter(Boolean);
+  const filterSummary = filterParts.join(" · ") || "sem filtros";
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -73,7 +81,7 @@ export default function PromptsPage() {
         </div>
       </div>
 
-      <Panel title="Categorias (clique para filtrar)">
+      <Collapsible title="Categorias (clique para filtrar)" summary={catSummary} testId="panel-categorias">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {groups.map((g) => (
             <div key={g.group}>
@@ -96,9 +104,9 @@ export default function PromptsPage() {
           ))}
         </div>
         {category && <p className="mt-3 text-sm">Filtrando por <strong>{name(category)}</strong>. <button type="button" className="text-accent underline" onClick={() => reset(setCategory)("")}>Limpar</button></p>}
-      </Panel>
+      </Collapsible>
 
-      <Panel title="Sinais do período (clique para filtrar)">
+      <Collapsible title="Sinais do período (clique para filtrar)" summary={sigSummary} testId="panel-sinais">
         {signals.error && <ErrorBox message={signals.error} onRetry={signals.reload} />}
         {signals.data && (
           <div className="grid gap-4 md:grid-cols-3" data-testid="signals">
@@ -116,9 +124,11 @@ export default function PromptsPage() {
                 {Object.entries(signals.data.tools).map(([k, n]) => <li key={k}><span className="rounded border border-line px-2 py-1 text-xs text-muted">{k} <span className="font-mono">{n}</span></span></li>)}</ul></div>
           </div>
         )}
-      </Panel>
+      </Collapsible>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-md border border-line bg-panel px-4 py-3 text-sm" onSubmit={(e) => { e.preventDefault(); setSearchApplied(search.trim()); setPage(0); }}>
+      {sessionId && <p className="text-sm">Mostrando só a sessão <code className="font-mono text-xs">{sessionId}</code>. <button type="button" className="text-accent underline" onClick={() => reset(setSessionId)("")}>Ver todas</button></p>}
+      <Collapsible title="Busca e filtros" summary={filterSummary} testId="panel-filtros">
+      <form className="flex flex-wrap items-end gap-3 text-sm" onSubmit={(e) => { e.preventDefault(); setSearchApplied(search.trim()); setPage(0); }}>
         <div><label htmlFor="q" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Buscar no texto mascarado</label>
           <input id="q" className="field w-64" value={search} minLength={2} maxLength={100} onChange={(e) => setSearch(e.target.value)} placeholder="ex.: contrato, credentials" /></div>
         <button className="btn">Buscar</button>
@@ -127,9 +137,8 @@ export default function PromptsPage() {
         )}
         <label className="ml-auto flex items-center gap-2"><input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} /> Atualizar sozinho a cada 10 s</label>
       </form>
-      {sessionId && <p className="text-sm">Mostrando só a sessão <code className="font-mono text-xs">{sessionId}</code>. <button type="button" className="text-accent underline" onClick={() => reset(setSessionId)("")}>Ver todas</button></p>}
 
-      <fieldset className="flex flex-wrap gap-x-5 gap-y-2 rounded-md border border-line bg-panel px-4 py-3 text-sm">
+      <fieldset className="mt-4 flex flex-wrap gap-x-5 gap-y-2 rounded-md border border-line px-4 py-3 text-sm">
         <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted">Filtros</legend>
         <label className="flex items-center gap-2"><input type="checkbox" checked={code} onChange={(e) => reset(setCode)(e.target.checked)} /> Contém código</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={sensitive} onChange={(e) => reset(setSensitive)(e.target.checked)} /> Dado sensível</label>
@@ -137,6 +146,7 @@ export default function PromptsPage() {
         <label className="flex items-center gap-2"><input type="checkbox" checked={blocked} onChange={(e) => reset(setBlocked)(e.target.checked)} /> Só bloqueados (ou que seriam)</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={onlyRisk} onChange={(e) => reset(setOnlyRisk)(e.target.checked)} /> Só com risco</label>
       </fieldset>
+      </Collapsible>
 
       <div>
         <Panel>
@@ -159,7 +169,7 @@ export default function PromptsPage() {
                       <td className="td max-w-xs">
                         <button type="button" onClick={() => setSelected(p)} aria-label={`Ver detalhes do prompt de ${p.user_id}`} className="block w-full text-left hover:underline">
                           {p.kind === "tool_call" && <span className="mr-1 rounded border border-line px-1 text-xs text-muted">{p.tool_name ?? "ação"}</span>}
-                          <MaskedText text={clip(p.masked_text.replace(/\s+/g, " "), 120)} />
+                          <span className="block truncate"><MaskedText text={clip(p.masked_text.replace(/\s+/g, " "), 300)} /></span>
                         </button>
                         <Attachments row={p} compact />
                         <div className="mt-1">{p.categories.map((c) => <Chip key={c.id}>{name(c.id)}</Chip>)}

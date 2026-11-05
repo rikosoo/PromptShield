@@ -34,3 +34,10 @@ export async function expectAccessible(page: Page, context?: string) {
   const bad = r.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(bad.map((v) => `${v.id}: ${v.nodes.slice(0, 2).map((n) => n.target.join(" ")).join(" | ")}`), context ?? "acessibilidade").toEqual([]);
 }
+
+/** Abre um bloco recolhível (Collapsible) pelo data-testid, se ainda estiver fechado. */
+export async function openPanel(page: Page, testId: string) {
+  const btn = page.getByTestId(testId).getByRole("button").first();
+  if ((await btn.getAttribute("aria-expanded")) !== "true") await btn.click();
+  await expect(btn).toHaveAttribute("aria-expanded", "true");
+}

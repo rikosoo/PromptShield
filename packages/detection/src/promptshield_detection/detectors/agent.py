@@ -108,6 +108,8 @@ CMD_RULES: list[tuple[re.Pattern[str], str, float, str]] = [
      "shell_destrutivo", 0.85, "Apagando infraestrutura na nuvem"),
     (re.compile(r"^\s*(?:env|set|export\s+-p)\s*(?:\||>|$)|/proc/(?:self|\d+|\*)/environ"), "leitura_env", 0.65, "Despeja o ambiente (pode conter segredos)"),
     (re.compile(r"(?i)\bget-childitem\s+env:|\bdir\s+env:|\bgci\s+env:"), "leitura_env", 0.65, "Lista variáveis de ambiente (PowerShell)"),
+    (re.compile(r"(?i)\b(?:irm|iwr|invoke-restmethod|invoke-webrequest)\b[^\n|]*\|\s*(?:iex|invoke-expression)\b"), "rede_externa", 0.9,
+     "Download executado direto no PowerShell (irm | iex)"),
     (re.compile(r"/dev/(?:tcp|udp)/[\w.\-]+/\d+"), "rede_externa", 0.95, "Conexão por /dev/tcp (shell reverso)"),
     (re.compile(r"\b(?:nc|ncat|netcat)\b[^\n;|&]*\s-(?:e|c)\s"), "rede_externa", 0.95, "netcat com execução (shell reverso)"),
     (re.compile(r"\bsocat\b[^\n]*\bexec:"), "rede_externa", 0.9, "socat com exec (shell reverso)"),
@@ -249,6 +251,9 @@ STRONG_SRC = re.compile(r"(?:~|\$home)?/?\.(?:aws|ssh|kube|azure|gnupg)\b|\.env\
 WEAK_SRC = re.compile(r"arquivo de (?:configuracao|config|senhas?)|config(?:uration)? file|\bsenhas\b|\bsecrets\b|\btokens\b")
 SEND_VERB = re.compile(r"\b(?:post|put|curl|wget|upload|send|envi\w+|mand\w+|encaminh\w+|exfiltr\w+|copi\w+|cole)\b")
 TEXT_URL = re.compile(r"https?://[^\s'\"<>)]+")
+# comando "baixa e executa" colado no texto (curl ... | sh, irm ... | iex): quem cola costuma estar prestes a rodar, ou a mostrar, um instalador
+DL_EXEC_TEXT = re.compile(r"(?i)\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b|"
+                          r"\b(?:irm|iwr|invoke-restmethod|invoke-webrequest)\b[^\n|]{0,300}\|\s*(?:iex|invoke-expression)\b")
 READ_VERB = re.compile(r"\b(?:read|le|leia|ler|abra|open|cat|pegue|pega|pegar|get|grab|pull|fetch|take|collect|dump|extract|colete|capture|copy|copie|copia)\b")
 
 
@@ -261,6 +266,12 @@ def detect_text(ctx: Context) -> list[Finding]:
     hosts = {_url_host(u) for u in TEXT_URL.findall(t)}
     allowed = tuple(ctx.allowed_hosts) + DEFAULT_ALLOWED_HOSTS
     foreign = {h for h in hosts if h and not _allowed(h, allowed)}
+    for m in DL_EXEC_TEXT.finditer(t):
+        urls = {_url_host(u) for u in TEXT_URL.findall(m.group(0))}
+        if urls and all(_allowed(h, allowed) for h in urls):     # host literal e permitido (github.com, localhost...): não é achado; sem host literal (variável), é
+            continue
+        out.append(Finding("rede_externa", 0.6, "Comando que baixa e executa script remoto colado no texto", None))
+        break
     strong, weak = STRONG_SRC.search(t), WEAK_SRC.search(t)
     if foreign and SEND_VERB.search(t) and (strong or weak) and READ_VERB.search(t):
         out.append(Finding("exfiltracao_ferramenta", 0.8 if strong else 0.6, "Instrução para enviar credenciais ou configuração a endereço externo", None))

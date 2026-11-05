@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { apiGet, expectAccessible, login, logout, USERS } from "./helpers";
+import { apiGet, expectAccessible, login, logout, openPanel, USERS } from "./helpers";
 
 // Valores esperados SEMPRE vêm da API (pelo proxy do console) no momento do teste: nada é digitado aqui.
 interface Overview { totals: { events: number; high_risk: number; with_code: number; with_sensitive: number; users: number }; daily: { events: number; high_risk: number }[]; by_department: { department: string; events: number; high_risk: number }[] }
@@ -64,6 +64,7 @@ test("análise de prompts: ordenação por risco, filtros e painel de categorias
   expect(await rows.count()).toBe(all.data.length);
 
   // painel das categorias: vem da taxonomia da API e filtra a lista ao clicar
+  await openPanel(page, "panel-categorias");
   const tax = (await apiGet<{ id: string; nome: string }[]>(page, "v1/taxonomy")).data;
   expect(tax).toHaveLength(30);
   await expect(page.locator("button[aria-pressed]").filter({ hasText: tax[0].nome }).first()).toBeVisible();
@@ -79,6 +80,7 @@ test("análise de prompts: ordenação por risco, filtros e painel de categorias
   await expect(page.getByTestId("total")).toHaveText(new RegExp(`^${all.total} resultado`));
 
   // filtros por caixa de seleção
+  await openPanel(page, "panel-filtros");
   for (const [label, param] of [["Contém código", "has_code=true"], ["Dado sensível", "has_sensitive=true"], ["Ação de agente", "agent_action=true"], ["Só bloqueados (ou que seriam)", "only_blocked=true"]] as const) {
     await page.getByLabel(label).check();
     const exp = await apiGet<unknown[]>(page, `v1/events?sort=risk&days=14&min_score=1&${param}&limit=20`);

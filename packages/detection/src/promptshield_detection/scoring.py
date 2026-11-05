@@ -4,7 +4,8 @@ from __future__ import annotations
 from .models import Finding, Reason
 from .taxonomy import Category
 
-SCORE_VERSION = "2026-11-a"   # 2026-11-a: infraestrutura no texto (IP, host interno, caminho com usuário, arquivo de negócio)
+SCORE_VERSION = "2026-11-b"   # 2026-11-b: credenciais do próprio PromptShield (ps_, pse_) e comando que baixa e executa script (irm | iex, curl | sh)
+# 2026-11-a: infraestrutura no texto (IP, host interno, caminho com usuário, arquivo de negócio)
 THRESHOLD = 0.5  # confiança mínima para a categoria contar
 SECONDARY_FACTOR = 0.3
 AGENT_ACTION_BONUS = 10
