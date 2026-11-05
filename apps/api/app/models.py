@@ -354,3 +354,50 @@ class PilotReview(Base):
     reviewer_id: Mapped[str | None] = mapped_column(String(200))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _ts()
+
+
+class UserGroup(Base):
+    """Grupo de usuários gerenciado no servidor. Políticas se referem a ele pelo nome (por isso o nome não muda)."""
+    __tablename__ = "user_groups"
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant()
+    name: Mapped[str] = mapped_column(String(60))
+    description: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = _ts()
+
+
+class UserGroupMember(Base):
+    __tablename__ = "user_group_members"
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant()
+    group_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("user_groups.id", ondelete="CASCADE"))
+    user_id: Mapped[str] = mapped_column(String(200))   # o `actor.user_id` dos eventos
+    added_at: Mapped[datetime] = _ts()
+
+
+class PolicyException(Base):
+    """A política deixa de valer para uma pessoa OU um grupo, até `expires_at`. Sempre com motivo."""
+    __tablename__ = "policy_exceptions"
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant()
+    policy_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("policies.id", ondelete="CASCADE"))
+    user_id: Mapped[str | None] = mapped_column(String(200))
+    group_name: Mapped[str | None] = mapped_column(String(60))
+    reason: Mapped[str] = mapped_column(String(500))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _ts()
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[str | None] = mapped_column(String(64))
+
+
+class AllowlistEntry(Base):
+    """Destino aprovado pelo administrador (hoje só `host`): alimenta `allowed_hosts` do motor."""
+    __tablename__ = "allowlist_entries"
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant()
+    kind: Mapped[str] = mapped_column(String(20))
+    value: Mapped[str] = mapped_column(String(253))
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _ts()

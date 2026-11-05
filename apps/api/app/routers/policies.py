@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 
-from app import audit
+from app import audit, governance
 from app.db import tenant_session
 from app.models import Analysis, Event, Policy
 from app.policy_engine import RANK, PolicySpec, Subject, evaluate
@@ -79,8 +79,9 @@ def simulate(body: SimulateIn, p: Annotated[Principal, Depends(require_roles("ad
         rows = s.execute(select(Event, Analysis).join(Analysis, Analysis.event_pk == Event.id).where(Event.occurred_at >= since)
                          .order_by(Event.occurred_at.desc()).limit(MAX_SIMULATED)).all()
         matched, users, stronger, examples = 0, set(), 0, []
+        member = governance.groups_of_users(s, {e.user_id for e, _ in rows}) if (spec.scope or {}).get("groups") else {}
         for e, a in rows:
-            ev = evaluate([spec], Subject(e.department, e.app, ()), a.categories, a.risk_score)
+            ev = evaluate([spec], Subject(e.department, e.app, (), e.user_id, member.get(e.user_id, ())), a.categories, a.risk_score)
             if not ev.hits:
                 continue
             matched += 1
@@ -93,5 +94,5 @@ def simulate(body: SimulateIn, p: Annotated[Principal, Depends(require_roles("ad
     return {"days": body.days, "events_in_period": total, "events_evaluated": len(rows), "truncated": total > len(rows),
             "matched": matched, "matched_users": len(users), "would_be_stronger_than_current": stronger, "examples": examples,
             "action": spec.action, "mode": spec.mode,
-            "ignored_scope": ["groups"] if (body.policy.scope or {}).get("groups") else [],
+            "ignored_scope": [],
             "note": "Em modo monitorar nada seria bloqueado; os números mostram o que a política faria em modo aplicar."}

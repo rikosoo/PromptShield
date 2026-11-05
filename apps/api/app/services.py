@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app import alerts, crypto, metrics
+from app import alerts, crypto, governance, metrics
 from app.config import settings
 from app.models import Analysis, Event, Incident, Policy, Tenant
 from app.policy_engine import DEFAULT_POLICIES, PolicySpec, Subject, evaluate
@@ -99,12 +99,15 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
 
     tenant = session.get(Tenant, p.tenant_id)
     assert tenant is not None
-    an = analyze(_engine_event(ev), ner=_ner)
+    an = analyze(_engine_event(ev), ner=_ner, allowed_hosts=governance.allowed_hosts(session))
 
+    exceptions = governance.active_exceptions(session)
     specs = [PolicySpec(id=str(x.id), name=x.name, action=x.action, mode=x.mode, enabled=x.enabled,
-                        scope=x.scope or {}, match=x.match or {})
+                        scope=x.scope or {}, match=x.match or {}, exceptions=exceptions.get(str(x.id), ()))
              for x in session.execute(select(Policy).where(Policy.enabled.is_(True))).scalars()]
-    pe = evaluate(specs, Subject(ev.actor.department, ev.source.app, tuple(ev.actor.groups)), an.categories, an.risk["score"])
+    subject = Subject(ev.actor.department, ev.source.app, tuple(ev.actor.groups), ev.actor.user_id,
+                      governance.member_groups(session, ev.actor.user_id))
+    pe = evaluate(specs, subject, an.categories, an.risk["score"])
 
     if force_monitor:
         pe.decision = "allow"

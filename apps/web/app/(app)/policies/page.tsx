@@ -136,7 +136,6 @@ export default function PoliciesPage() {
                 <div className="mt-3 space-y-2" role="region" aria-label="Resultado da simulação" data-testid="simulation">
                   <p><strong className="font-mono text-lg" data-testid="sim-matched">{sim.matched}</strong> de {sim.events_evaluated} eventos casariam, de <strong>{sim.matched_users}</strong> usuário(s). Em {sim.would_be_stronger_than_current} deles a ação seria mais forte que a atual.</p>
                   {sim.truncated && <p className="text-xs text-muted">Foram avaliados só os {sim.events_evaluated} eventos mais recentes de {sim.events_in_period}.</p>}
-                  {sim.ignored_scope.length > 0 && <p className="text-xs text-muted">O escopo por grupo não foi considerado na simulação.</p>}
                   <p className="text-xs text-muted">{sim.note}</p>
                   {sim.examples.length > 0 && <ul className="space-y-1 text-xs">{sim.examples.map((x) => <li key={x.event_id}><span className="font-mono">{x.risk_score}</span> · {x.user_id}: <MaskedText text={x.masked_text} /></li>)}</ul>}
                 </div>

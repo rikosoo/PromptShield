@@ -48,6 +48,12 @@ EXPECTED: dict[tuple[str, str], object] = {
     ("POST", "/v1/privacy/subject/erase"): ADMIN, ("POST", "/v1/privacy/retention/run"): ADMIN,
     ("POST", "/v1/reports/schedules"): ADMIN, ("DELETE", "/v1/reports/schedules/{schedule_id}"): ADMIN,
     ("DELETE", "/v1/reports/{report_id}"): ADMIN,
+    # grupos, exceções e lista de domínios permitidos: leitura para todos os papéis, escrita só do administrador
+    ("GET", "/v1/groups"): ALL, ("GET", "/v1/groups/{group_id}"): ALL, ("GET", "/v1/exceptions"): ALL, ("GET", "/v1/allowlist"): ALL,
+    ("POST", "/v1/groups"): ADMIN, ("PATCH", "/v1/groups/{group_id}"): ADMIN, ("DELETE", "/v1/groups/{group_id}"): ADMIN,
+    ("POST", "/v1/groups/{group_id}/members"): ADMIN, ("DELETE", "/v1/groups/{group_id}/members/{user_id}"): ADMIN,
+    ("POST", "/v1/policies/{policy_id}/exceptions"): ADMIN, ("POST", "/v1/exceptions/{exception_id}/revoke"): ADMIN,
+    ("POST", "/v1/allowlist"): ADMIN, ("DELETE", "/v1/allowlist/{entry_id}"): ADMIN,
     ("POST", "/v1/enroll"): ENROLL,
     ("GET", "/sensor/install.ps1"): PUBLIC, ("GET", "/sensor/install.sh"): PUBLIC,      # sem segredo: o token vai na linha de comando da máquina
     ("GET", "/sensor/promptshield-sensor.pyz"): PUBLIC, ("GET", "/sensor/manifest.json"): PUBLIC,

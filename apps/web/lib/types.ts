@@ -66,7 +66,7 @@ export type PolicyDraft = Omit<Policy, "id" | "version" | "updated_at">;
 export interface Simulation {
   days: number; events_in_period: number; events_evaluated: number; truncated: boolean; matched: number; matched_users: number;
   would_be_stronger_than_current: number; examples: { event_id: string; user_id: string; risk_score: number; masked_text: string; current_decision: string }[];
-  action: string; mode: string; ignored_scope: string[]; note: string;
+  action: string; mode: string; note: string;
 }
 export interface DirectoryUser { id: string; email: string; display_name: string | null; role: Role }
 

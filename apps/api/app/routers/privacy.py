@@ -62,13 +62,17 @@ def subject_erase(body: EraseIn, p: Annotated[Principal, Depends(require_roles("
             s.execute(text("DELETE FROM notification_outbox WHERE kind = 'alert' AND ref_id = ANY(:ids)"), {"ids": alert_ids})
         s.execute(text("DELETE FROM alerts WHERE user_id = :u"), {"u": body.user_id})
         s.execute(text("DELETE FROM events WHERE user_id = :u"), {"u": body.user_id})  # cascata: análises e incidentes
+        memberships = s.execute(text("DELETE FROM user_group_members WHERE user_id = :u"), {"u": body.user_id}).rowcount
+        exceptions = s.execute(text("DELETE FROM policy_exceptions WHERE user_id = :u"), {"u": body.user_id}).rowcount
         executive = s.execute(text("SELECT count(*) FROM reports WHERE kind IN ('executivo', 'piloto')")).scalar_one()
         result = {"events_deleted": len(ids), "incidents_deleted": incidents, "alerts_deleted": len(alert_ids),
+                  "group_memberships_deleted": memberships, "exceptions_deleted": exceptions,
                   "reports_to_review": executive,
                   "note": "Relatórios executivos já gerados podem listar a pessoa no ranking de indicador de risco: revise e apague com DELETE /v1/reports/{id}. "
                           "O registro de auditoria guarda só o hash do identificador."}
         audit.write(s, p, "privacy.subject_erase", "subject", subject_hash(body.user_id),
-                    {"justification": body.justification, "events": len(ids), "incidents": incidents, "alerts": len(alert_ids)})
+                    {"justification": body.justification, "events": len(ids), "incidents": incidents, "alerts": len(alert_ids),
+                     "group_memberships": memberships, "exceptions": exceptions})
         return result
 
 

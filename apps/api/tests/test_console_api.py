@@ -122,7 +122,7 @@ def test_policy_simulation_counts_past_events_without_saving(client, world, data
     longer = client.post("/v1/policies/simulate", json={**body, "days": 60}, headers=h).json()
     assert longer["matched"] == 2 and longer["events_in_period"] == 6
     grp = {**body, "policy": {**body["policy"], "scope": {"groups": ["devs"]}}}
-    assert client.post("/v1/policies/simulate", json=grp, headers=h).json()["ignored_scope"] == ["groups"]
+    assert client.post("/v1/policies/simulate", json=grp, headers=h).json()["matched"] == 0      # ninguém está no grupo "devs" cadastrado: a simulação agora considera o grupo
     assert len(client.get("/v1/policies", headers=h).json()) == 8            # nada foi gravado
     assert client.post("/v1/policies/simulate", json=body, headers=world.user("leitura")).status_code == 403
 

@@ -19,6 +19,7 @@ from app.routers import (
     events,
     exports,
     feedback,
+    governance,
     incidents,
     inference_hook,
     license_status,
@@ -97,6 +98,7 @@ app.include_router(events.router)
 app.include_router(feedback.router)
 app.include_router(incidents.router)
 app.include_router(policies.router)
+app.include_router(governance.router)
 app.include_router(admin.router)
 app.include_router(analytics.router)
 app.include_router(alerts.router)
