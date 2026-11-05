@@ -62,3 +62,12 @@ Página `/history` do console. Usa `GET /v1/events` (filtros: `user_q`, `q`, `ap
 
 Serviço separado do fornecedor (`apps/licensing`, banco próprio, tabelas `lic_*`) + biblioteca pura (`packages/licensing`) + cliente dentro da API (`app/license_client.py`, tabela `license_state`, rotas `/v1/license/*`, renovação no worker). O estado da licença é uma função pura sobre a autorização assinada guardada; a API aplica o resultado em um único ponto (`security.current_principal` para inspeção e escrita, `license.check_new_seat` para matrícula). Ver [`licenciamento.md`](licenciamento.md).
 
+
+## Grupos, exceções e domínios permitidos
+
+```
+administrador --> /v1/groups | /v1/policies/{id}/exceptions | /v1/allowlist --> tabelas com RLS (migração 0019) + auditoria
+ingestão: grupos do usuário + exceções vigentes + domínios --> analyze(allowed_hosts) e policy_engine.evaluate --> decisão
+```
+
+`app/governance.py` lê o contexto na sessão do tenant; a regra de exceção é função pura em `policy_engine`. Exceção por grupo vale só para **membros cadastrados no servidor**, nunca para o grupo que o sensor declara no evento. A lista de domínios alimenta `allowed_hosts` do motor (rede externa, instalação de pacote, envio de dados). Só `host` existe hoje.

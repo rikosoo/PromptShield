@@ -5,7 +5,8 @@ import { useSession } from "@/components/session";
 import { ActionBadge, Chip, Empty, ErrorBox, Loading, MaskedText, Panel } from "@/components/ui";
 import { api, send, useLoad } from "@/lib/api";
 import { ACTION_LABEL } from "@/lib/labels";
-import type { Action, Policy, PolicyDraft, Simulation } from "@/lib/types";
+import Link from "next/link";
+import type { Action, Policy, PolicyDraft, Simulation, UserGroup } from "@/lib/types";
 import { useTaxonomy } from "@/lib/useTaxonomy";
 
 const blank = (): PolicyDraft => ({ name: "", description: null, enabled: true, scope: {}, match: { categories: [] }, action: "alert", mode: "monitor" });
@@ -16,6 +17,7 @@ export default function PoliciesPage() {
   const isAdmin = me.role === "admin";
   const { name, groups } = useTaxonomy();
   const { data, error, loading, reload } = useLoad(() => api<Policy[]>("v1/policies"), []);
+  const userGroups = useLoad(() => api<UserGroup[]>("v1/groups"), []);
   const [editing, setEditing] = useState<{ id: string | null; draft: PolicyDraft } | null>(null);
   const [sim, setSim] = useState<Simulation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +61,12 @@ export default function PoliciesPage() {
     }
   }
 
+  const scopeGroups = d?.scope.groups ?? [];
+  const toggleGroup = (g: string) => {
+    const next = scopeGroups.includes(g) ? scopeGroups.filter((x) => x !== g) : [...scopeGroups, g];
+    const { groups: _drop, ...rest } = d!.scope;
+    patch({ scope: next.length ? { ...rest, groups: next } : rest });
+  };
   const cats = d?.match.categories ?? [];
   const toggleCat = (id: string) => patch({ match: { ...d!.match, categories: cats.includes(id) ? cats.filter((c) => c !== id) : [...cats, id] } });
 
@@ -67,7 +75,7 @@ export default function PoliciesPage() {
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold">Políticas</h1>
-          <p className="max-w-3xl text-sm text-muted">Toda política nasce em <strong>monitorar</strong>: a decisão devolvida é sempre &quot;permitir&quot; e a que teria sido tomada fica registrada. <strong>Aplicar</strong> é opção explícita por política.</p>
+          <p className="max-w-3xl text-sm text-muted">Toda política nasce em <strong>monitorar</strong>: a decisão devolvida é sempre &quot;permitir&quot; e a que teria sido tomada fica registrada. <strong>Aplicar</strong> é opção explícita por política. Para liberar uma pessoa ou grupo por um tempo, use <Link href="/exceptions" className="underline">Exceções</Link>; para aprovar destinos de rede, <Link href="/allowlist" className="underline">Domínios permitidos</Link>.</p>
         </div>
         {isAdmin && <button type="button" className="btn-primary" onClick={() => open()}>Nova política</button>}
       </div>
@@ -123,6 +131,13 @@ export default function PoliciesPage() {
                 <div><label htmlFor="papp" className="mb-1 block font-medium">Ferramentas (ex.: claude_code)</label><input id="papp" className="field w-full" value={(d.scope.apps ?? []).join(", ")} onChange={(e) => patch({ scope: { ...d.scope, apps: csv(e.target.value) } })} /></div>
                 <div><label htmlFor="pscore" className="mb-1 block font-medium">Score mínimo</label><input id="pscore" type="number" min={0} max={100} className="field w-full" value={d.match.min_score ?? 0} onChange={(e) => patch({ match: { ...d.match, min_score: Number(e.target.value) } })} /></div>
               </div>
+              <fieldset><legend className="mb-1 font-medium">Grupos de usuários (nenhum marcado = todas as pessoas)</legend>
+                <div className="flex flex-wrap gap-3 rounded border border-line p-2" data-testid="scope-groups">
+                  {[...new Set([...(userGroups.data ?? []).map((g) => g.name), ...scopeGroups])].map((g) => (
+                    <label key={g} className="inline-flex items-center gap-1"><input type="checkbox" checked={scopeGroups.includes(g)} onChange={() => toggleGroup(g)} /> {g}</label>
+                  ))}
+                  {(userGroups.data ?? []).length === 0 && scopeGroups.length === 0 && <span className="text-xs text-muted">Nenhum grupo cadastrado. Crie em <Link href="/groups" className="underline">Grupos</Link>.</span>}
+                </div></fieldset>
               <label className="flex items-center gap-2"><input type="checkbox" checked={d.enabled} onChange={(e) => patch({ enabled: e.target.checked })} /> Política ligada</label>
             </fieldset>
 

@@ -36,7 +36,7 @@ export interface PromptRow {
   flags: { has_code: boolean; has_sensitive: boolean; is_agent_action: boolean; intents?: string[]; has_attachments?: boolean };
   tool_name?: string | null; session_id?: string | null; spans?: { type: string; masked: string }[];
   risk_score: number; reasons: { rule: string; contribution: number; category?: string }[];
-  decision: Action; would_decide: Action; policy_hits: { policy_id: string; name: string; action: string; mode: string }[];
+  decision: Action; would_decide: Action; policy_hits: { policy_id: string; name: string; action: string; mode: string; excepted?: string }[];
   incident_id: string | null;
   feedback?: Feedback | null;
 }
@@ -122,3 +122,12 @@ export interface DevicesOut { devices: DeviceRow[]; active: number; coverage: Re
 
 export interface SignalsOut { span_types: Record<string, number>; intents: Record<string, number>; kinds: Record<string, number>; tools: Record<string, number> }
 export interface PersonRow { user_id: string; department: string | null; events: number; high_risk: number; max_risk: number; avg_risk: number; last_seen: string }
+
+export interface UserGroup { id: string; name: string; description: string | null; members: number; created_at: string }
+export interface UserGroupDetail extends UserGroup { member_ids: string[] }
+export type ExceptionState = "vigente" | "vencida" | "revogada";
+export interface PolicyExceptionRow {
+  id: string; policy_id: string; policy_name: string | null; user_id: string | null; group: string | null; reason: string;
+  expires_at: string; created_by: string; created_at: string; revoked_at: string | null; state: ExceptionState;
+}
+export interface AllowlistRow { id: string; kind: "host"; value: string; note: string | null; created_by: string; created_at: string }

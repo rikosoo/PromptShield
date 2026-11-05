@@ -37,7 +37,7 @@ export function PromptDetailDialog({ row: incoming, onClose, onSession, onPerson
               <div><h3 className="mb-1 text-xs font-semibold uppercase text-muted">Motivos do score</h3>
                 <ul className="space-y-1 font-mono text-xs">{row.reasons.map((r, i) => <li key={i}>+{r.contribution} · {r.rule}</li>)}{!row.reasons.length && <li>sem motivos de risco</li>}</ul></div>
               {row.policy_hits.length > 0 && <div><h3 className="mb-1 text-xs font-semibold uppercase text-muted">Políticas que casaram</h3>
-                <ul className="space-y-1 text-xs">{row.policy_hits.map((h) => <li key={h.policy_id}>{h.name} <span className="text-muted">({h.mode === "monitor" ? "monitorar" : "aplicar"})</span></li>)}</ul></div>}
+                <ul className="space-y-1 text-xs">{row.policy_hits.map((h) => <li key={h.policy_id}>{h.name} <span className="text-muted">({h.excepted === "true" ? "exceção: não aplicada" : h.mode === "monitor" ? "monitorar" : "aplicar"})</span></li>)}</ul></div>}
               <FeedbackForm key={`${row.event_id}:${row.feedback?.updated_at ?? ""}`} row={row} onSaved={(fb) => { setSaved({ id: row.event_id, fb }); onReviewed?.(); }} />
               <p className="text-xs text-muted">Indicador de risco, requer revisão humana.</p>
               {row.incident_id && <Link href={`/incidents/${row.incident_id}`} className="btn-primary inline-block">Abrir incidente</Link>}

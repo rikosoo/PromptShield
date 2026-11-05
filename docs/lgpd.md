@@ -25,6 +25,7 @@ Consequência: o cliente decide a finalidade e a base legal, fala com os titular
 | Usuários do console (e-mail, papel, departamento) | equipe de segurança | autenticação e papéis | `users` | até o administrador removê-los (`DELETE /v1/users/{id}`); a auditoria guarda só o UUID | não | admin |
 | Relatórios gerados (PDF/CSV) | agregados; o executivo lista um ranking com identificadores | prestação de contas | `reports` | `retention_days` | não | admin, analista, auditor |
 | Registros das requisições dos inference hooks | — | medir tempo e veredito | `inference_hook_requests` | `retention_days` | **sem conteúdo** | admin, analista, auditor (agregados) |
+| Participação em grupos e exceções de política | administrador (cadastra o identificador da pessoa) | aplicar políticas por grupo e liberar uma pessoa por tempo limitado | `user_group_members`, `policy_exceptions` | até o administrador remover; exceção vence sozinha (máx. 365 dias) | não | admin (escrita); todos os papéis (leitura) |
 | Revisões do piloto (rótulo certo/errado) | revisor | medir falso positivo | `pilot_reviews` | apaga com o evento | não | admin, analista |
 | Segredos de canais, URLs de webhook, segredo de assinatura dos hooks | cliente | operar integrações | colunas `*_ciphertext` | até o cliente remover | **sim** | só a aplicação |
 | Chaves de API | cliente | autenticar coletores | `api_keys` | até revogar/expirar | só o hash SHA-256 | — |
@@ -66,6 +67,8 @@ Consequência: o cliente decide a finalidade e a base legal, fala com os titular
 Prazos de resposta variam (por exemplo, o GDPR dá um mês em regra, o art. 19 da LGPD tem prazos próprios e a Califórnia 45 dias): **confirme com o advogado**. Quem recebe e responde os pedidos é o **cliente**; o produto é a ferramenta. Não há fila de pedidos nem verificação de identidade do titular no produto.
 
 **Eliminação e backup:** um backup restaurado **traz de volta** dados já eliminados. Mantenha o registro dos pedidos de eliminação fora do banco e reaplique-os depois de restaurar (`docs/operacao.md`).
+
+> **Limite conhecido:** a eliminação a pedido do titular apaga a participação em grupos e as exceções da pessoa, mas o registro de auditoria é imutável e guarda os identificadores como o administrador os digitou (`group.members_add`, `exception.create`). Se isso for um problema para a empresa, use identificadores que não sejam nome ou e-mail (por exemplo, um código interno).
 
 ## 5. Retenção e minimização (princípios implementados)
 
