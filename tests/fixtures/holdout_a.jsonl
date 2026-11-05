@@ -15,7 +15,7 @@
 {"id": "ha0015", "group": "pii", "lang": "pt", "kind": "prompt", "text": "email do cliente joao.pereira@gmail.com, cpf 529.982.247-25", "expected": ["pii"], "hard_negative": false, "requires_ner": false, "has_name": false}
 {"id": "ha0016", "group": "pii", "lang": "pt", "kind": "prompt", "text": "moro na rua das flores, 123, apto 45, cep 01310-100 sao paulo", "expected": ["pii"], "hard_negative": false, "requires_ner": false, "has_name": false}
 {"id": "ha0017", "group": "pii", "lang": "pt", "kind": "prompt", "text": "titulo de eleitor 1234 5678 9012 e cnh 12345678901", "expected": ["pii"], "hard_negative": false, "requires_ner": false, "has_name": false}
-{"id": "ha0018", "group": "pii", "lang": "pt", "kind": "prompt", "text": "chave pix: 529.982.247-25 (cpf)", "expected": ["pii"], "hard_negative": false, "requires_ner": false, "has_name": false}
+{"id": "ha0018", "group": "pii", "lang": "pt", "kind": "prompt", "text": "chave pix: 529.982.247-25 (cpf)", "expected": ["pii", "financeiro"], "hard_negative": false, "requires_ner": false, "has_name": false}
 {"id": "ha0019", "group": "pii", "lang": "pt", "kind": "prompt", "text": "chave pix aleatoria: 123e4567-e89b-12d3-a456-426614174000 em nome de Carlos Lima", "expected": ["pii"], "hard_negative": false, "requires_ner": false, "has_name": false}
 {"id": "ha0020", "group": "pii", "lang": "pt", "kind": "prompt", "text": "passaporte BR123456 validade 2031, titular Ana Souza", "expected": ["pii"], "hard_negative": false, "requires_ner": false, "has_name": false}
 {"id": "ha0021", "group": "pii", "lang": "en", "kind": "prompt", "text": "my SSN is 078-05-1120, can you check if it leaked?", "expected": ["pii"], "hard_negative": false, "requires_ner": false, "has_name": false}

@@ -15,7 +15,7 @@ def test_own_credentials_are_masked_in_stored_text_and_response(client, world):
     body = r.json()
     assert ENROLL not in str(body) and KEY not in str(body)
     assert "ps_****" in body["masked_text"] and "pse_****" in body["masked_text"]
-    assert any(c["id"] == "segredo" for c in body["categories"]) and body["risk"]["score_version"] == "2026-11-b"
+    assert any(c["id"] == "segredo" for c in body["categories"]) and body["risk"]["score_version"] == "2026-11-c"
     stored = client.get(f"/v1/events/{ev['event_id']}", headers=world.user("leitura")).text
     assert ENROLL not in stored and KEY not in stored
     assert world.sql("SELECT count(*) FROM events WHERE masked_text LIKE '%0f9e8d7c%' OR masked_text LIKE '%a1b2c3d4%'").scalar() == 0

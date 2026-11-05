@@ -74,4 +74,4 @@ def test_powershell_download_exec_as_agent_action_is_strong():
 
 
 def test_score_version_is_bumped():
-    assert run("oi").score_version == "2026-11-b"
+    assert run("oi").score_version == "2026-11-c"

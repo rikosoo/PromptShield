@@ -250,6 +250,8 @@ def detect_file_tool(ctx: Context) -> list[Finding]:
 STRONG_SRC = re.compile(r"(?:~|\$home)?/?\.(?:aws|ssh|kube|azure|gnupg)\b|\.env\b|\bcredentials?\b|\bcredenciais\b|\bid_(?:rsa|ed25519)\b|chave privada|private key|\.pgpass|\.npmrc|\.netrc")
 WEAK_SRC = re.compile(r"arquivo de (?:configuracao|config|senhas?)|config(?:uration)? file|\bsenhas\b|\bsecrets\b|\btokens\b")
 SEND_VERB = re.compile(r"\b(?:post|put|curl|wget|upload|send|envi\w+|mand\w+|encaminh\w+|exfiltr\w+|copi\w+|cole)\b")
+EXPLAIN_ASK = re.compile(r"(?i)o que (?:faz|esse|este|isso)|what does|is (?:it|this) safe|e seguro|explique|explica|explain|como funciona|how does|significa|what is this|que hace|es seguro|explicame")
+RUN_ASK = re.compile(r"(?i)\b(?:rode|rodar|execute|executar|run|execut[ae]|ejecuta|ejecutar)\b")
 TEXT_URL = re.compile(r"https?://[^\s'\"<>)]+")
 # comando "baixa e executa" colado no texto (curl ... | sh, irm ... | iex): quem cola costuma estar prestes a rodar, ou a mostrar, um instalador
 DL_EXEC_TEXT = re.compile(r"(?i)\b(?:curl|wget)\b[^\n|]{0,300}\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b|"
@@ -270,7 +272,10 @@ def detect_text(ctx: Context) -> list[Finding]:
         urls = {_url_host(u) for u in TEXT_URL.findall(m.group(0))}
         if urls and all(_allowed(h, allowed) for h in urls):     # host literal e permitido (github.com, localhost...): não é achado; sem host literal (variável), é
             continue
-        out.append(Finding("rede_externa", 0.6, "Comando que baixa e executa script remoto colado no texto", None))
+        # análise contextual: pedir para EXPLICAR o comando ("o que faz?", "é seguro?") é pergunta de segurança, não tentativa operacional
+        asking = bool(EXPLAIN_ASK.search(t)) and not RUN_ASK.search(t)
+        out.append(Finding("rede_externa", 0.5 if asking else 0.6,
+                           "Pergunta sobre comando que baixa e executa script remoto" if asking else "Comando que baixa e executa script remoto colado no texto", None))
         break
     strong, weak = STRONG_SRC.search(t), WEAK_SRC.search(t)
     if foreign and SEND_VERB.search(t) and (strong or weak) and READ_VERB.search(t):
@@ -286,3 +291,11 @@ def detect(ctx: Context) -> list[Finding]:
     if cmd:
         out += detect_command(cmd, ctx.allowed_hosts)
     return out
+
+
+def has_external_url(ctx: Context) -> bool:
+    """O texto cita um endereço http(s) fora da lista permitida (usado na correlação "credencial + destino externo")."""
+    if not ctx.text:
+        return False
+    allowed = tuple(ctx.allowed_hosts) + DEFAULT_ALLOWED_HOSTS
+    return any(h and not _allowed(h, allowed) for h in (_url_host(u) for u in TEXT_URL.findall(ctx.text)))

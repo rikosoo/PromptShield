@@ -4,7 +4,7 @@ Gerado por `packages/detection/scripts/catalog.py` rodando o motor de verdade so
 
 Estimativa honesta de acerto: ver `docs/deteccao.md` (cerca de 82% de acerto exato num conjunto independente, F1 0,82). Esta página mostra exemplos, não uma medida de desempenho.
 
-**Resultado neste catálogo:** 67 de 71 exemplos detectados na categoria esperada.
+**Resultado neste catálogo:** 68 de 71 exemplos detectados na categoria esperada.
 
 ## Dados sensíveis
 
@@ -33,9 +33,9 @@ Como detecta: Cartão com Luhn e prefixo de bandeira; agência e conta.
 | Tipo | O que a pessoa digitou | Detectou? | Categorias | Score | Fica assim no console |
 |---|---|---|---|---|---|
 | prompt | `Cartão 4111 1111 1111 1111 validade 12/29` | sim | financeiro | 56 | `Cartão **** **** **** 1111 validade 12/29` |
-| prompt | `Agência 1234 conta 56789-0` | sim | financeiro | 48 | `[conta bancária]` |
+| prompt | `Agência 1234 conta 56789-0` | sim | financeiro | 48 | `[CONTA_BANCARIA]` |
 | prompt | `IBAN GB82 WEST 1234 5698 7654 32` | sim | financeiro | 57 | `IBAN GB82 **** ****` |
-| prompt | `chave pix: 529.982.247-25` | **NÃO** | pii | 58 | `chave pix: ***.***.***-25` |
+| prompt | `chave pix: 529.982.247-25` | sim | pii, financeiro | 82 | `chave pix: ***.***.***-25` |
 
 ### Dados de saúde (`saude`, risco padrão critico)
 
@@ -56,12 +56,12 @@ Como detecta: Regex de formatos conhecidos, entropia perto de palavras-chave, li
 | prompt | `use a chave ‹aws-sintético› no deploy` | sim | segredo | 78 | `use a chave AKIA**** no deploy` |
 | prompt | `GITHUB_TOKEN=‹ghp-sintético›` | sim | segredo | 78 | `GITHUB_TOKEN=gh*_****` |
 | prompt | `ANTHROPIC_API_KEY=‹anthropic-sintético›` | sim | segredo | 78 | `ANTHROPIC_API_KEY=sk-ant-****` |
-| prompt | `postgres://admin:Sup3rS3cret!@db.interno.exemplo:5432/clientes` | sim | segredo | 72 | `****://usuario:****@…` |
-| prompt | `a senha do banco é Tr0ub4dor&3` | sim | segredo | 68 | `a senha do banco é ****` |
-| prompt | `slack webhook: ‹slackhook-sintético›` | sim | segredo | 76 | `slack webhook: https://hooks.slack.com/****` |
+| prompt | `postgres://admin:Sup3rS3cret!@db.interno.exemplo:5432/clientes` | sim | segredo | 75 | `****://usuario:****@…` |
+| prompt | `a senha do banco é Tr0ub4dor&3` | sim | segredo | 70 | `a senha do banco é ****` |
+| prompt | `slack webhook: ‹slackhook-sintético›` | sim | segredo | 86 | `slack webhook: https://hooks.slack.com/****` |
 | prompt | `minha chave do PromptShield é ‹psk-sintético›` | sim | segredo | 78 | `minha chave do PromptShield é ps_****` |
-| prompt | `$env:PS_API='http://localhost:8000'; $env:PS_TOKEN='‹pse-sintético›'; irm "$env:PS_API/sensor/install.ps1" \| ` | sim | segredo, rede_externa | 82 | `$env:PS_API='http://localhost:8000'; $env:PS_TOKEN='pse_****'; irm "$env:PS_API/sensor/install.ps1" \| iex` |
-| prompt | `-----BEGIN RSA PRIVATE KEY----- ⏎ MIIEowIBAAKCAQEAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ⏎ -----END ` | sim | segredo | 79 | `-----BEGIN ****----- ⏎ MIIEowIBAAKCAQEAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ⏎ -----END RSA PRIVATE` |
+| prompt | `$env:PS_API='http://localhost:8000'; $env:PS_TOKEN='‹pse-sintético›'; irm "$env:PS_API/sensor/install.ps1" \| ` | sim | segredo, rede_externa | 100 | `$env:PS_API='http://localhost:8000'; $env:PS_TOKEN='pse_****'; irm "$env:PS_API/sensor/install.ps1" \| iex` |
+| prompt | `-----BEGIN RSA PRIVATE KEY----- ⏎ MIIEowIBAAKCAQEAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx ⏎ -----END ` | sim | segredo | 79 | `-----BEGIN ****----- ⏎ [CHAVE_PRIVADA] ⏎ -----END RSA PRIVATE KEY-----` |
 
 ### Base de clientes (`cliente`, risco padrão alto)
 

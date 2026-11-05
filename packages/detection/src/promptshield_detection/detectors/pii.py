@@ -150,10 +150,10 @@ def _extra(t: str) -> list[Finding]:
             out.append(Finding("financeiro", 0.85, "Routing number (ABA) válido", "routing", m.start(1), m.end(1), "[routing]"))
     for m in ACCOUNT_RE.finditer(t):
         if ROUTING_RE.search(t):
-            out.append(Finding("financeiro", 0.8, "Número de conta com routing number", "conta_bancaria", m.start(1), m.end(1), "[conta]"))
+            out.append(Finding("financeiro", 0.8, "Número de conta com routing number", "conta_bancaria", m.start(1), m.end(1), "[CONTA_BANCARIA]"))
     for rx in (BANK2_RE, CONTA_RE):
         for m in rx.finditer(t):
-            out.append(Finding("financeiro", 0.8, "Agência e conta bancária", "conta_bancaria", m.start(), m.end(), "[conta bancária]"))
+            out.append(Finding("financeiro", 0.8, "Agência e conta bancária", "conta_bancaria", m.start(), m.end(), "[CONTA_BANCARIA]"))
     if PIX_CTX.search(t):
         for m in UUID_RE.finditer(t):
             out.append(Finding("financeiro", 0.8, "Chave PIX aleatória", "pix", m.start(), m.end(), "[chave pix]"))
@@ -230,9 +230,9 @@ def detect(ctx: Context) -> list[Finding]:
         out.append(Finding("pii", 0.7, "CEP", "cep", m.start(), m.end(), "*****-***"))
     for m in BANK_RE.finditer(t):
         out.append(Finding("financeiro", 0.8, "Agência e conta bancária", "conta_bancaria",
-                           m.start(), m.end(), "[conta bancária]"))
+                           m.start(), m.end(), "[CONTA_BANCARIA]"))
     for m in BANK_REV_RE.finditer(t):
-        out.append(Finding("financeiro", 0.8, "Conta e agência bancária", "conta_bancaria", m.start(), m.end(), "[conta bancária]"))
+        out.append(Finding("financeiro", 0.8, "Conta e agência bancária", "conta_bancaria", m.start(), m.end(), "[CONTA_BANCARIA]"))
     for m in PIX_RE.finditer(t):
         out.append(Finding("financeiro", 0.72, "Chave Pix", "pix", m.start("key"), m.end("key"), "[chave pix]"))
     out += _extra(t)

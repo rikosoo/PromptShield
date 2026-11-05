@@ -12,7 +12,17 @@ DOC_EXAMPLES = {
 }
 PLACEHOLDER = re.compile(
     r"(?i)^(?:x{4,}|\*{3,}|\.{3,}|<.*>|\$\{.*\}|\{\{.*\}\}|your[-_ ]|change[-_]?me|example|exemplo|todo|"
-    r"(?:placeholder|senha|password|secret|token|dummy)\w{0,4}$|test(?:e)?$)")   # "senha123" é exemplo; "SenhaDoBanco9" é senha de verdade
+    r"(?:placeholder|senha|password|secret|token|dummy)\w{0,4}$|test(?:e)?$|"
+    # português e espanhol: "COLE_O_TOKEN", "SEU_TOKEN", "INSIRA_A_CHAVE", "TU_TOKEN_AQUI"; inglês: "REPLACE_ME", "PASTE_YOUR_KEY"
+    r"cole[-_ ]|colar[-_ ]|seu[-_ ]|sua[-_ ]|seus[-_ ]|insira[-_ ]|insere[-_ ]|coloque[-_ ]|troque[-_ ]|substitua[-_ ]|pegue[-_ ]|tu[-_]|su[-_]|pega[-_]|"
+    r"replace[-_ ]|insert[-_ ]|paste[-_ ]|put[-_ ]|fill[-_ ]|enter[-_ ]|my[-_]?(?:api)?[-_]?(?:token|key)|meu[-_]?(?:token|chave)|"
+    r".*[-_](?:aqui|here|goes[-_]?here|placeholder|exemplo|example)$)")   # "senha123" é exemplo; "SenhaDoBanco9" é senha de verdade
+
+
+def is_placeholder(value: str) -> bool:
+    """Valor de exemplo (placeholder): vale para os dois idiomas e para valores ofuscados com asteriscos."""
+    v = value.strip("'\"` ")
+    return _placeholder(v) or "***" in v
 
 RULES: list[tuple[re.Pattern[str], str, str, float, str]] = [
     (re.compile(r"\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{16}\b"), "aws_access_key", "Chave de acesso AWS", 0.97, "AKIA****"),
@@ -54,7 +64,11 @@ KEYWORD_RE = re.compile(
 # autenticação básica no comando: curl -u usuario:senha
 BASIC_AUTH_RE = re.compile(r"(?:^|\s)(?:-u|--user)[ =]+['\"]?[\w.@-]+:([^\s'\"]{6,})")
 PASSWORD_RE = re.compile(
-    r"(?i)(?<![A-Za-z])(?:senha|password|passwd|pwd|passcode|pass)(?![A-Za-z])[^\n:=@/]{0,40}?(?:[:=]|\b(?:[eé]|eh|is|are|seria|set to|igual a)\b)\s*[\"'`]?([^\s\"'`,;]{6,64})")
+    r"(?i)(?<![A-Za-z])(?:senh+a+s?|password|passwd|pwd|passcode|pass|contrase[nñ]a|psw)(?![A-Za-z])[^\n:=@/]{0,40}?"
+    r"(?:[:=]|\b(?:[eé]|eh|es|is|are|era|será|sera|seria|foi|was|set to|igual a)\b)\s*[\"'`]?([^\s\"'`,;]{6,64})")
+# "login admin senha T1yiWM8OCYAR" (sem conector): só vale se o valor tem cara de senha de verdade (3 classes de caracteres)
+PASSWORD_DIRECT_RE = re.compile(
+    r"(?i)(?<![A-Za-z])(?:senh+a+|password|passwd|pwd|contrase[nñ]a)\s+(?:(?:do|da|de|of|for|para|del)\s+)?(?:[\w.-]{1,20}\s+)?([^\s\"'`,;:=]{8,64})")
 COMMON_WORDS = {"required", "obrigatoria", "obrigatorio", "necessaria", "necessario", "important", "importante", "esquecida", "expired",
                 "expirada", "wrong", "incorreta", "invalida", "invalid", "correct", "correta", "forgotten", "protected", "protegida",
                 "stored", "armazenada", "hashed", "criptografada", "encrypted", "reset", "manager", "gerenciador", "policy", "politica",
@@ -64,7 +78,7 @@ COMMON_WORDS = {"required", "obrigatoria", "obrigatorio", "necessaria", "necessa
 def _password_like(value: str) -> bool:
     """Parece uma senha de verdade: mistura classes de caracteres ou é longa e variada, e não é palavra comum nem placeholder."""
     v = value.strip(".,)")
-    if len(v) < 6 or v.lower() in COMMON_WORDS or _placeholder(v) or v.startswith(("<", "$", "{", "%", "[")):
+    if len(v) < 6 or v.lower() in COMMON_WORDS or _placeholder(v) or v.startswith(("<", "$", "{", "[")) or re.fullmatch(r"%\w+%", v):
         return False
     classes = sum(bool(re.search(p, v)) for p in (r"[a-z]", r"[A-Z]", r"\d", r"[^A-Za-z0-9]"))
     pure_word = bool(re.fullmatch(r"[A-Z]?[a-z]+", v))
@@ -109,6 +123,13 @@ def detect(ctx: Context) -> list[Finding]:
         if any(a <= m.start(1) < b for a, b in taken) or _placeholder(value) or value.startswith(("$", "{", "<", "%")):
             continue
         out.append(Finding("segredo", 0.85, "Usuário e senha na linha de comando (-u)", "password", m.start(1), m.end(1), "****"))
+        taken.append((m.start(1), m.end(1)))
+    for m in PASSWORD_DIRECT_RE.finditer(t):
+        value = m.group(1)
+        classes = sum(bool(re.search(p, value)) for p in (r"[a-z]", r"[A-Z]", r"\d", r"[^A-Za-z0-9]"))
+        if any(a <= m.start(1) < b for a, b in taken) or classes < 3 or not _password_like(value):
+            continue
+        out.append(Finding("segredo", 0.8, "Senha informada no texto (sem conector)", "password", m.start(1), m.end(1), "[SENHA]"))
         taken.append((m.start(1), m.end(1)))
     for m in PASSWORD_RE.finditer(t):
         value = m.group(1)

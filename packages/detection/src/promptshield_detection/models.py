@@ -78,6 +78,10 @@ class Analysis:
     masked_text: str = ""
     attachments: list[dict[str, Any]] = field(default_factory=list)   # só nomes (já mascarados), tamanho e tipo
     score_version: str = ""
+    findings: list[dict[str, Any]] = field(default_factory=list)      # achados com tipo, categoria, confiança, regra e evidência JÁ mascarada (nunca o valor)
+    severity: str = "baixo"                                           # baixo | medio (moderado) | alto | critico (faixas 0-24, 25-49, 50-69, 70-100)
+    alert_level: str = "informativo"                                  # informativo | atencao | alto | critico: alertas PASSIVOS, nada é bloqueado
+    engine_version: str = ""
 
     def category_ids(self, min_confidence: float = 0.5) -> set[str]:
         return {c["id"] for c in self.categories if c["confidence"] >= min_confidence}

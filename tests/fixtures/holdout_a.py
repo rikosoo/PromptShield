@@ -44,7 +44,8 @@ for t in [
     "chave pix aleatoria: 123e4567-e89b-12d3-a456-426614174000 em nome de Carlos Lima",
     "passaporte BR123456 validade 2031, titular Ana Souza",
 ]:
-    add("pii", "pt", t, ["pii"])
+    # 2026-11-05 (motor 2.0): chave Pix com CPF é dado pessoal E financeiro (o próprio grupo financeiro deste conjunto já esperava os dois para "pix")
+    add("pii", "pt", t, ["pii"] + (["financeiro"] if t.startswith("chave pix: 529") else []))
 for t in [
     "my SSN is 078-05-1120, can you check if it leaked?",
     "employee SSN: 219-09-9999, DOB 04/12/1979",

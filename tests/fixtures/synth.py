@@ -60,6 +60,12 @@ def make(kind: str, n: int) -> str:
         return "ps_" + _s(r, 8, "0123456789abcdef") + "_" + _s(r, 32, _AN + "_-")
     if kind == "pse":      # token de matrícula do PromptShield
         return "pse_" + _s(r, 8, "0123456789abcdef") + "_" + _s(r, 32, _AN + "_-")
+    if kind == "tok":      # token "solto", sem prefixo de fornecedor: letras minúsculas e dígitos misturados, 19 caracteres (como o do print do dono)
+        body = [r.choice(string.ascii_lowercase) for _ in range(11)] + [r.choice(string.digits) for _ in range(8)]
+        r.shuffle(body)
+        return "".join(body)
+    if kind == "keybody":  # corpo de chave privada em base64 colado SEM o cabeçalho BEGIN
+        return "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + _s(r, 48, _AN + "+/")
     if kind == "awsdoc":   # a chave de EXEMPLO da documentação da AWS (pública): montada na hora para não aparecer em arquivo
         return "AKIA" + "IOSFODNN7" + "EXAMPLE"
     if kind == "pwd":

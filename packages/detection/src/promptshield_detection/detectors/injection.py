@@ -17,12 +17,12 @@ class InjectionClassifier(Protocol):
 
 I = re.I  # noqa: E741
 # Todas as expressões casam no texto sem acento e em minúsculas (ctx.folded): "esqueça" e "esqueca" valem igual.
-_OBJ = (r"(?:instructions?|instrucoes|rules?|regras|guidelines?|diretrizes|orientacoes|constraints?|restricoes|restrictions?|"
+_OBJ = (r"(?:instructions?|instrucoes|instrucciones|rules?|regras|reglas|directrices|restricciones|guidelines?|diretrizes|orientacoes|constraints?|restricoes|restrictions?|"
         r"politicas?|policies|directives?|diretivas|parametros|parameters|programacao|programming|prompts?|system prompt|safeguards?|protecoes|filtros?|filters?|"
         r"(?:previous|prior|above|earlier|anteriores|acima)\s+(?:messages?|mensagens?)|system messages?)")
-_QUAL = r"(?:(?:all|any|the|your|every|todas?|as|os|suas?|seus?|essas?|those|these|previous|prior|above|earlier|system|anteriores|acima|antes|do sistema|de sistema|originais|original|aquelas|aqueles|earlier|prior)\s+)*"
+_QUAL = r"(?:(?:all|any|the|your|every|todas?|todos|las|los|tus|sus|mis|as|os|suas?|seus?|essas?|those|these|previous|prior|above|earlier|system|anteriores|previas|previos|acima|antes|do sistema|de sistema|originais|original|aquelas|aqueles|earlier|prior)\s+)*"
 IGNORE = re.compile(
-    r"(?:ignore|ignora|ignorem|disregard|forget|override|bypass|circumvent|drop|neglect|set aside|discard|dismiss|scrap|abandon|abandone|deixe de lado|deixa de lado|deixa pra la|deixe pra la|desconsiderem|desconsidere|desconsidera|desconsiderar|ignorar|esqueca|esquece|esquecer|descarte|descartar|violar|"
+    r"(?:ignore|ignora|ignorem|olvida|olvide|omite|descarta|disregard|forget|override|bypass|circumvent|drop|neglect|set aside|discard|dismiss|scrap|abandon|abandone|deixe de lado|deixa de lado|deixa pra la|deixe pra la|desconsiderem|desconsidere|desconsidera|desconsiderar|ignorar|esqueca|esquece|esquecer|descarte|descartar|violar|"
     r"contorne|burle|nao siga(?: mais)?|pare de seguir|deixe de seguir|stop following|do not follow|don'?t follow|"
     r"quebre|violate|break)\s+" + _QUAL + _OBJ + r"(?:\s+(?:anteriores|acima|antes|previous|above))?|"
     r"(?:forget|esqueca|ignore|ignora)\s+(?:everything|all|tudo|todo)(?:\s+(?:that|que|you|voce|above|acima|before|antes|te|they|eles))*|"
