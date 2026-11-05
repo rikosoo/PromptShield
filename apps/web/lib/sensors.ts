@@ -6,11 +6,8 @@ export const IA_INFO: Record<string, { label: string; mode: IaMode; app?: string
   chatgpt_web: { label: "ChatGPT (web)", mode: "extensao", app: "chatgpt_web" },
   copilot_web: { label: "Copilot (web)", mode: "extensao", app: "copilot_web" },
   gemini_web: { label: "Gemini (web)", mode: "extensao", app: "gemini_web" },
-  codex_desktop: { label: "Codex (app desktop)", mode: "indisponivel" },
-  claude_desktop: { label: "Claude (app desktop)", mode: "manual" },
   claude_code: { label: "Claude Code (CLI)", mode: "automatico", app: "claude_code" },
   codex_cli: { label: "Codex (CLI)", mode: "automatico", app: "codex_cli" },
-  copilot_desktop: { label: "Copilot (app desktop)", mode: "indisponivel" },
   github_copilot_cli: { label: "GitHub Copilot CLI", mode: "automatico", app: "github_copilot_cli" },
   claude_web: { label: "Claude (web)", mode: "extensao", app: "claude_web" },
 };

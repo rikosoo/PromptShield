@@ -32,7 +32,7 @@ O instalador: mostra o que será enviado e pede para digitar `sim`; baixa o sens
 
 Para remover: `python3 ~/.promptshield/sensor/promptshield-sensor.pyz deploy --user --uninstall --confirm-employees-notified` (no Windows, `python` e `%USERPROFILE%\.promptshield\sensor\...`).
 
-O instalador **pergunta quais IAs monitorar** (números separados por vírgula: 1 ChatGPT web, 2 Copilot web, 3 Gemini web, 4 Codex desktop, 5 Claude desktop, 6 Claude Code CLI, 7 Codex CLI, 8 Copilot desktop; 9 GitHub Copilot CLI e 10 Claude web foram acrescentados) e mostra o passo a passo de cada uma. Detalhes e o estado honesto de cada opção: `docs/guia-ias.md`.
+O instalador **pergunta quais IAs monitorar** (números separados por vírgula: 1 ChatGPT web, 2 Copilot web, 3 Gemini web, 4 Claude web, 5 Claude Code CLI, 6 Codex CLI, 7 GitHub Copilot CLI) e mostra o passo a passo de cada uma. Detalhes e o estado honesto de cada opção: `docs/guia-ias.md`.
 
 ## O que ainda NÃO é simples (e por quê)
 

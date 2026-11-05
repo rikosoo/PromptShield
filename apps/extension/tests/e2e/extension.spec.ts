@@ -58,7 +58,7 @@ test("CPF sintético: pede confirmação e envia a versão mascarada", async () 
   expect(JSON.stringify(await sent(page))).not.toContain(CPF);
   expect(api.events).toHaveLength(1);
   const ev = api.events[0].body;
-  expect(ev).toMatchObject({ kind: "prompt", source: { channel: "browser", app: "chatgpt_web", integration_status: "experimental" },
+  expect(ev).toMatchObject({ kind: "prompt", source: { channel: "browser", app: "chatgpt_web", integration_status: "partial" },
     actor: { user_id: "rafael.moreira", department: "Engenharia" }, content: { text: PROMPT }, context: { personal_account: false } });
 });
 

@@ -40,7 +40,7 @@ if ((Get-FileHash $pyz -Algorithm SHA256).Hash.ToLower() -ne $m.sha256) { throw 
 $ias = $env:PS_IAS
 if (-not $ias -and -not $env:PS_TOOLS) {
   & $py $pyz deploy --list-ias --confirm-employees-notified
-  $ias = Read-Host 'Numeros separados por virgula (ex.: 1,6), ou ENTER para o padrao (Claude Code e GitHub Copilot CLI)'
+  $ias = Read-Host 'Numeros separados por virgula (ex.: 1,5), ou ENTER para o padrao (Claude Code e GitHub Copilot CLI)'
 }
 $extra = @(); if ($ias) { $extra = @('--ias', $ias) } elseif ($env:PS_TOOLS) { $extra = @('--tools', $env:PS_TOOLS) }
 & $py $pyz deploy --user --api-url $api --token $tok --confirm-employees-notified @extra
@@ -67,7 +67,7 @@ GOT=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb"
 IAS="${PS_IAS:-}"
 if [ -z "$IAS" ] && [ -z "${PS_TOOLS:-}" ] && [ -r /dev/tty ]; then
   python3 "$PYZ" deploy --list-ias --confirm-employees-notified
-  printf "Numeros separados por virgula (ex.: 1,6), ou ENTER para o padrao (Claude Code e GitHub Copilot CLI): "; read -r IAS < /dev/tty || IAS=""
+  printf "Numeros separados por virgula (ex.: 1,5), ou ENTER para o padrao (Claude Code e GitHub Copilot CLI): "; read -r IAS < /dev/tty || IAS=""
 fi
 set -- deploy --user --api-url "$PS_API" --token "$PS_TOKEN" --confirm-employees-notified
 if [ -n "$IAS" ]; then set -- "$@" --ias "$IAS"; elif [ -n "${PS_TOOLS:-}" ]; then set -- "$@" --tools "$PS_TOOLS"; fi

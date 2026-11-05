@@ -5,22 +5,22 @@ import pytest
 
 from promptshield_claude_hook import deploy, ias, setup
 
-NAMES = ["ChatGPT", "Copilot (web", "Gemini", "Codex (app desktop)", "Claude (app desktop)", "Claude Code", "Codex (CLI)", "Copilot (app desktop)"]
+NAMES = ["ChatGPT", "Copilot (web", "Gemini", "Claude (web", "Claude Code", "Codex (CLI)", "GitHub Copilot CLI"]
 
 
-def test_the_eight_requested_options_are_in_the_list_in_order():
+def test_only_the_seven_supported_options_are_in_the_list_in_order_and_no_desktop_apps():
     text = ias.render_list()
     for i, name in enumerate(NAMES, 1):
         assert any(line.strip().startswith(f"{i})") and name in line for line in text.splitlines()), (i, name)
-    assert "separados por vírgula" in text
+    assert "separados por vírgula" in text and "desktop" not in text.lower() and len(ias.CATALOG) == 7
 
 
-@pytest.mark.parametrize("raw,expected", [("1,2,6", [1, 2, 6]), (" 6 , 1 ,1", [1, 6]), ("1;3", [1, 3]), ("todas", list(range(1, 11))), ("TODAS", list(range(1, 11)))])
+@pytest.mark.parametrize("raw,expected", [("1,2,5", [1, 2, 5]), (" 5 , 1 ,1", [1, 5]), ("1;3", [1, 3]), ("todas", list(range(1, 8))), ("TODAS", list(range(1, 8)))])
 def test_parse_accepts_commas_spaces_and_all(raw, expected):
     assert ias.parse_selection(raw) == (expected, [])
 
 
-@pytest.mark.parametrize("raw", ["", "abc", "1,x", "0", "11", "1,99", "1.5"])
+@pytest.mark.parametrize("raw", ["", "abc", "1,x", "0", "8", "10", "1,99", "1.5"])
 def test_parse_rejects_bad_input_with_a_message(raw):
     nums, errs = ias.parse_selection(raw)
     assert nums == [] and errs
@@ -30,12 +30,22 @@ def test_every_option_has_an_honest_state_and_a_guide_and_manual_ones_do_not_aut
     assert {i.state for i in ias.CATALOG} <= {ias.AUTO, ias.EXT, ias.MANUAL, ias.NONE}
     for i in ias.CATALOG:
         assert i.status and ias.guide(i.n)
-    for n in (4, 8):                                       # Codex desktop e Copilot desktop: nada é instalado sozinho
-        assert ias.BY_N[n].state != ias.AUTO and ias.BY_N[n].tool is None
-    assert ias.BY_N[7].state == ias.AUTO and ias.BY_N[7].tool == "codex_cli"      # Codex CLI: hooks.json, EXPERIMENTAL
-    assert "EXPERIMENTAL" in ias.BY_N[7].status and "A VERIFICAR" in ias.BY_N[4].status
-    assert ias.tools_for([1, 2, 3, 10]) == ["browser_extension"] and ias.tools_for([6, 5, 1]) == ["claude_code", "browser_extension"]
-    assert ias.tools_for([4, 8]) == [] and ias.tools_for([7]) == ["codex_cli"]
+    assert all(i.tool for i in ias.CATALOG)                 # só sobraram IAs que o sensor realmente cobre (os apps de desktop saíram)
+    assert ias.BY_N[6].state == ias.AUTO and ias.BY_N[6].tool == "codex_cli"      # Codex CLI: hooks.json, EXPERIMENTAL
+    assert "EXPERIMENTAL" in ias.BY_N[6].status and "A VERIFICAR" in ias.BY_N[6].status
+    assert ias.tools_for([1, 2, 3, 4]) == ["browser_extension"] and ias.tools_for([5, 4, 1]) == ["claude_code", "browser_extension"]
+    assert ias.tools_for([6]) == ["codex_cli"] and ias.tools_for([7]) == ["github_copilot_cli"]
+
+
+def test_tested_label_only_where_the_owner_saw_it_work_on_a_real_machine():
+    """ChatGPT e Gemini (web) apareceram no console do dono; Claude Code é a integração mais testada; o resto continua experimental."""
+    assert {i.name.split(" (")[0] for i in ias.CATALOG if i.tested} == {"ChatGPT", "Gemini", "Claude Code"}
+    text = ias.render_list()
+    for line in text.splitlines():
+        if line.strip().startswith(("1)", "3)", "5)")):
+            assert "testado" in line and "experimental" not in line
+        if line.strip().startswith(("2)", "4)", "6)", "7)")):
+            assert "experimental" in line and "testado" not in line
 
 
 def test_wizard_choice_flow_configures_only_what_is_automatic(tmp_path, monkeypatch):
@@ -48,13 +58,13 @@ def test_wizard_choice_flow_configures_only_what_is_automatic(tmp_path, monkeypa
     monkeypatch.setattr("promptshield_claude_hook.client.get_hook_config", lambda cfg: {"failure_mode": "open"})
     prepared = []
     monkeypatch.setattr(setup.browser, "install_extension", lambda *a, **k: prepared.append(a) or tmp_path)
-    out, answers = [], iter(["6, 7 ,8, 1", "sim", "0"])
+    out, answers = [], iter(["5, 6 ,7, 1"] + ["sim"] * 6)
     w = setup.Wizard(ask=lambda p: next(answers), secret=lambda p: "", say=lambda *x: out.append(" ".join(map(str, x))), open_url=lambda u: None)
     w.choose()
     text = "\n".join(out)
-    assert setup.is_installed(setup.read_settings(setup.claude_settings_path()))        # 6: automático
-    assert prepared and not setup.copilot_hooks_path().exists()                        # 1: extensão preparada; Copilot CLI não foi pedido
-    assert "[7] Codex (CLI): AUTOMÁTICO" in text and "[8] Copilot (app desktop): INDISPONÍVEL" in text and "Resumo" in text
+    assert setup.is_installed(setup.read_settings(setup.claude_settings_path()))        # 5: automático
+    assert prepared and setup.copilot_hooks_path().exists()                            # 1: extensão preparada; 7: Copilot CLI automático
+    assert "[6] Codex (CLI): AUTOMÁTICO" in text and "[7] GitHub Copilot CLI (terminal): AUTOMÁTICO" in text and "Resumo" in text
     assert "extensão" in text.lower()
 
 
@@ -71,9 +81,9 @@ def test_deploy_ias_flag_prints_guides_and_maps_tools(tmp_path, monkeypatch, cap
     monkeypatch.setattr(deploy.client, "get_hook_config", lambda cfg: {"failure_mode": "open"})
     monkeypatch.setattr(deploy.browser, "install_extension", lambda *a, **k: tmp_path)
     assert deploy.main(["--list-ias"]) == 0 and "Quais IAs" in capsys.readouterr().out
-    rc = deploy.main(["--api-url", "http://x", "--token", "pse_t", "--ias", "6,7", "--confirm-employees-notified", "--root", str(tmp_path)])
+    rc = deploy.main(["--api-url", "http://x", "--token", "pse_t", "--ias", "5,6", "--confirm-employees-notified", "--root", str(tmp_path)])
     out = capsys.readouterr().out
-    assert rc == 0 and "[7] Codex (CLI): AUTOMÁTICO" in out and "[6] Claude Code (CLI, terminal): AUTOMÁTICO" in out
+    assert rc == 0 and "[6] Codex (CLI): AUTOMÁTICO" in out and "[5] Claude Code (CLI, terminal): AUTOMÁTICO" in out
     p = deploy.paths(tmp_path)
     assert setup.is_installed(json.loads(p["claude"].read_text())) and not p["copilot"].exists()
     assert deploy.main(["--api-url", "http://x", "--token", "pse_t", "--ias", "0", "--confirm-employees-notified", "--root", str(tmp_path)]) == 2
@@ -91,9 +101,9 @@ def test_every_ia_has_a_stable_key_the_server_accepts():
     assert set(ias.KEY) == set(ias.BY_N)                                           # nenhuma IA do catálogo fica sem identificador
     assert len(set(ias.KEY.values())) == len(ias.KEY)
     assert all(re.fullmatch(r"[a-z0-9_]{2,40}", k) for k in ias.KEY.values())      # o mesmo padrão que a API valida
-    assert ias.keys_for([10, 1, 6]) == ["claude_web", "chatgpt_web", "claude_code"]
+    assert ias.keys_for([4, 1, 5]) == ["claude_web", "chatgpt_web", "claude_code"]
     # onde a IA gera eventos, o identificador é o `source.app` do evento (o painel liga uma coisa à outra)
-    assert {ias.KEY[1], ias.KEY[2], ias.KEY[3], ias.KEY[6], ias.KEY[9], ias.KEY[10]} == {
+    assert {ias.KEY[1], ias.KEY[2], ias.KEY[3], ias.KEY[4], ias.KEY[5], ias.KEY[7]} == {
         "chatgpt_web", "copilot_web", "gemini_web", "claude_code", "github_copilot_cli", "claude_web"}
 
 
@@ -107,7 +117,7 @@ def test_deploy_sends_the_chosen_ias_to_the_server(tmp_path, monkeypatch):
     monkeypatch.setattr(deploy, "enroll", fake_enroll)
     monkeypatch.setattr(deploy.client, "get_hook_config", lambda cfg: {"failure_mode": "open"})
     monkeypatch.setattr(deploy.browser, "install_extension", lambda *a, **k: tmp_path)
-    assert deploy.main(["--api-url", "http://x", "--token", "pse_t", "--ias", "7,1,6", "--confirm-employees-notified", "--root", str(tmp_path)]) == 0
+    assert deploy.main(["--api-url", "http://x", "--token", "pse_t", "--ias", "6,1,5", "--confirm-employees-notified", "--root", str(tmp_path)]) == 0
     assert seen["ias"] == ["chatgpt_web", "claude_code", "codex_cli"] and seen["tools"] == ["browser_extension", "claude_code", "codex_cli"]
     seen.clear()
     assert deploy.main(["--api-url", "http://x", "--token", "pse_t", "--tools", "claude_code", "--force", "--confirm-employees-notified",
@@ -142,17 +152,17 @@ def test_wizard_reports_choices_with_add_and_survives_a_failed_report(tmp_path, 
     monkeypatch.setattr("promptshield_claude_hook.client.get_hook_config", lambda cfg: {"failure_mode": "open"})
     sent = []
     monkeypatch.setattr("promptshield_claude_hook.client.put_ias", lambda cfg, keys, mode="add": sent.append((keys, mode)) or {"ias": keys})
-    out, answers = [], iter(["6, 5", "sim", "0"])
+    out, answers = [], iter(["5, 4", "sim", "0"])
     w = setup.Wizard(ask=lambda p: next(answers), secret=lambda p: "", say=lambda *x: out.append(" ".join(map(str, x))), open_url=lambda u: None)
     w.choose()
-    assert sent == [(["claude_desktop", "claude_code"], "add")] and "painel de Sensores" in "\n".join(out)
+    assert sent == [(["claude_web", "claude_code"], "add")] and "painel de Sensores" in "\n".join(out)
 
     def broken(cfg, keys, mode="add"):
         raise client_mod.ApiError("API indisponível")
 
     from promptshield_claude_hook import client as client_mod
     monkeypatch.setattr(client_mod, "put_ias", broken)
-    out2, answers2 = [], iter(["6", "sim", "0"])
+    out2, answers2 = [], iter(["5", "sim", "0"])
     w2 = setup.Wizard(ask=lambda p: next(answers2), secret=lambda p: "", say=lambda *x: out2.append(" ".join(map(str, x))), open_url=lambda u: None)
     w2.choose()
     assert "não consegui registrar" in "\n".join(out2) and "Resumo" in "\n".join(out2)               # o resto do assistente continua
@@ -192,7 +202,7 @@ def test_reinstalling_on_an_enrolled_machine_reports_the_ias_with_the_existing_k
     monkeypatch.setattr(deploy.client, "get_hook_config", lambda cfg: {"failure_mode": "open"})
     seen = []
     monkeypatch.setattr(deploy.client, "put_ias", lambda cfg, keys, mode="add": seen.append((cfg.api_url, cfg.api_key, keys, mode)) or {"ias": keys})
-    rc = deploy.main(["--api-url", "http://servidor:8000", "--token", "pse_t", "--ias", "6,1", "--confirm-employees-notified", "--root", str(tmp_path)])
+    rc = deploy.main(["--api-url", "http://servidor:8000", "--token", "pse_t", "--ias", "5,1", "--confirm-employees-notified", "--root", str(tmp_path)])
     out = capsys.readouterr().out
     assert rc == 0 and "já está matriculada" in out and "IAs informadas ao servidor" in out
     assert seen == [("http://servidor:8000", "ps_ja_existe", ["chatgpt_web", "claude_code"], "set")]

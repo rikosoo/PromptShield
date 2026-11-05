@@ -105,7 +105,7 @@ Abra <http://localhost:3000> e entre com o e-mail que você passou em `--admin-e
 2. No seu computador, com o túnel aberto, instale o sensor apontando para `http://localhost:8000`:
    - Windows (PowerShell): `$env:PS_API='http://localhost:8000'; $env:PS_TOKEN='pse_...'; irm "$env:PS_API/sensor/install.ps1" | iex`
    - Linux/macOS: `curl -fsSL http://localhost:8000/sensor/install.sh | PS_API=http://localhost:8000 PS_TOKEN=pse_... sh`
-3. O instalador pergunta quais IAs monitorar (números de 1 a 10; estado de cada uma em `docs/guia-ias.md`). Para a extensão do navegador, carregue a pasta uma vez em `chrome://extensions`.
+3. O instalador pergunta quais IAs monitorar (números de 1 a 7; estado de cada uma em `docs/guia-ias.md`). Para a extensão do navegador, carregue a pasta uma vez em `chrome://extensions`.
 4. Teste com um prompt **sintético**, por exemplo `SIMULADO: o CPF de teste é 529.982.247-25`, e veja o evento em **Todos os prompts** e em **Sensores**.
 
 Se o túnel cair, o sensor segue em "falha aberta" (não trava a ferramenta e não monitora até voltar).

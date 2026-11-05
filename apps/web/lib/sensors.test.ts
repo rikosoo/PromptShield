@@ -27,11 +27,10 @@ describe("iaState: só diz 'capturando' com evento de verdade", () => {
     expect(iaState({ activity: act }, "gemini_web")).toMatchObject({ evidence: "parou", events7d: 0, events30d: 3 });
     expect(iaState({ activity: act }, "claude_web")).toMatchObject({ evidence: "aguardando", lastAt: null });
   });
-  it("manual e indisponível não fingem evidência, mesmo que haja evento de outra IA", () => {
+  it("IA sem como confirmar não finge evidência, mesmo que haja evento de outra IA (ids dos apps de desktop, que saíram da lista, de sensores já instalados)", () => {
     expect(iaState({ activity: { claude_code: { events_7d: 50, events_30d: 50, last_at: ago(1) } } }, "claude_desktop").evidence).toBe("manual");
     expect(iaState({ activity: {} }, "codex_cli")).toMatchObject({ mode: "automatico", evidence: "aguardando" });   // hooks do Codex: automático, mas só vira "capturando" com evento
-    expect(iaState({ activity: {} }, "codex_desktop").evidence).toBe("indisponivel");
-    expect(iaState({ activity: {} }, "copilot_desktop").evidence).toBe("indisponivel");
+    expect(iaState({ activity: {} }, "codex_desktop")).toMatchObject({ label: "codex_desktop", evidence: "manual" });
   });
   it("id desconhecido (sensor mais novo que o console) aparece com o próprio id, sem quebrar", () => {
     const s = iaState({ activity: {} }, "ia_nova");
@@ -39,8 +38,8 @@ describe("iaState: só diz 'capturando' com evento de verdade", () => {
     expect(iaLabel("ia_nova")).toBe("ia_nova");
     expect(s.evidence).toBe("manual");
   });
-  it("o catálogo do console cobre as 10 IAs do sensor, e cada evidência tem texto", () => {
-    expect(Object.keys(IA_INFO).sort()).toEqual(["chatgpt_web", "claude_code", "claude_desktop", "claude_web", "codex_cli", "codex_desktop", "copilot_desktop", "copilot_web", "gemini_web", "github_copilot_cli"]);
+  it("o catálogo do console cobre as 7 IAs do sensor (sem os apps de desktop), e cada evidência tem texto", () => {
+    expect(Object.keys(IA_INFO).sort()).toEqual(["chatgpt_web", "claude_code", "claude_web", "codex_cli", "copilot_web", "gemini_web", "github_copilot_cli"]);
     for (const v of Object.values(EVIDENCE_LABEL)) expect(v.length).toBeGreaterThan(3);
   });
 });

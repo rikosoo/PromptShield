@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildEvent, postEvent } from "../../src/api";
+import { buildEvent, integrationStatus, postEvent } from "../../src/api";
 import { mergeConfig } from "../../src/config";
 import { INSPECTION_STOPPED } from "../../src/types";
 
 const cfg = mergeConfig({ api_url: "https://a.test", api_key: "k", user_id: "fulano", department: "RH" }, undefined, false);
 
 describe("buildEvent", () => {
+  it("marca como parcial só os sites vistos funcionando (ChatGPT e Gemini) e os demais como experimentais", () => {
+    expect(integrationStatus("chatgpt_web")).toBe("partial");
+    expect(integrationStatus("gemini_web")).toBe("partial");
+    for (const app of ["copilot_web", "claude_web", "localtest"]) expect(integrationStatus(app)).toBe("experimental");
+  });
   it("produz o evento universal, marcando a integração como experimental", () => {
     const ev = buildEvent({ app: "claude_web", text: "olá", sessionPath: "/chat/abc" }, cfg, "install-1", "", new Date("2026-10-14T12:00:00Z"));
     expect(ev).toMatchObject({

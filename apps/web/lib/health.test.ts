@@ -40,7 +40,7 @@ describe("collectorHealth", () => {
     expect(h.level).toBe("crit");
     expect(h.confirmedCoverage).toBeCloseTo(1 / 3);
   });
-  it("manual e indisponível não entram na cobertura (nunca contam como cobertas)", () => {
+  it("IA sem como confirmar (ids antigos de desktop) não entra na cobertura e nunca conta como coberta", () => {
     const h = collectorHealth([dev({ ias: ["claude_desktop", "codex_desktop"] })], NOW);
     expect(h.rows).toEqual([]);
     expect(h.level).toBe("unknown");

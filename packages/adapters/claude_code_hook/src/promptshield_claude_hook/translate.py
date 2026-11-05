@@ -41,6 +41,17 @@ def _tool_content(name: str | None, ti: dict[str, Any], limit: int) -> dict[str,
     return {"tool_name": name, "text": _stringify(ti, limit)}
 
 
+PROMPT_KEYS = ("prompt", "user_prompt", "userPrompt", "input", "message", "text")   # "prompt" é o documentado do Claude Code; os demais são tolerância (Codex: A VERIFICAR)
+
+
+def prompt_text(data: dict[str, Any]) -> str | None:
+    for k in PROMPT_KEYS:
+        v = data.get(k)
+        if isinstance(v, str) and v.strip():
+            return v
+    return None
+
+
 def event_id_for(hook_input: dict[str, Any]) -> str:
     """Determinístico quando há tool_use_id ou prompt_id: repetir o mesmo hook não duplica evento na API."""
     ref = hook_input.get("tool_use_id") or hook_input.get("prompt_id")
@@ -55,7 +66,10 @@ def build_event(hook_input: dict[str, Any], cfg: Config, app: str = "claude_code
         return None
     lim = cfg.max_text_chars
     if name == "UserPromptSubmit":
-        kind, content = "prompt", {"text": _clip(str(hook_input.get("prompt", "")), lim)}
+        text = prompt_text(hook_input)
+        if text is None:
+            return None
+        kind, content = "prompt", {"text": _clip(text, lim)}
     elif name == "PreToolUse":
         kind = "tool_call"
         content = _tool_content(hook_input.get("tool_name"), hook_input.get("tool_input") or {}, lim)

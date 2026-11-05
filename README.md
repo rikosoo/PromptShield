@@ -15,7 +15,7 @@ sensor na máquina → evento universal → motor de detecção → política �
 |---|---|
 | Servidor na AWS (Docker), console, login de teste (mock) | Login real (OIDC) com provedor de verdade |
 | Instalação do sensor com uma linha no Windows; hook do Claude Code | HTTPS e domínio (hoje HTTP; o hook envia o texto original à API) |
-| Extensão no ChatGPT web (a única verificada em site real) | Seletores de Claude, Gemini e Copilot na web; Codex e Copilot desktop são só guias manuais |
+| Extensão no ChatGPT web e no Gemini web (vistas em site real) | Seletores de Claude e Copilot na web; Codex CLI (o hook falhou com código 1 no primeiro teste real; corrigido, falta ver enviando); apps de desktop não são cobertos |
 | Detecção por regras, histórico de prompts, revisão humana, licença, suspensão | Executável assinado; instalação por Intune/GPO; teste em Mac |
 | CI com testes de API, motor, console, extensão, serviço de licenças e `docker compose` | Pentest independente; revisão jurídica; cobrança |
 | Licenciamento on-premise (ativação por código, autorização assinada, estados), testado em processo e em banco real | Ensaio entre duas máquinas e com um cliente de verdade ([`docs/licenciamento.md`](docs/licenciamento.md)) |
@@ -30,7 +30,7 @@ sensor na máquina → evento universal → motor de detecção → política �
    $env:PS_API='http://IP_DA_VM:8000'; $env:PS_TOKEN='pse_...'; irm "$env:PS_API/sensor/install.ps1" | iex
    ```
 
-   O instalador pergunta quais IAs monitorar, por números (1 ChatGPT web, 2 Copilot web, 3 Gemini web, 4 Codex desktop, 5 Claude desktop, 6 Claude Code CLI, 7 Codex CLI, 8 Copilot desktop, 9 GitHub Copilot CLI, 10 Claude web). Estado de cada uma: [`docs/guia-ias.md`](docs/guia-ias.md). Windows: [`docs/teste-windows.md`](docs/teste-windows.md).
+   O instalador pergunta quais IAs monitorar, por números (1 ChatGPT web, 2 Copilot web, 3 Gemini web, 4 Claude web, 5 Claude Code CLI, 6 Codex CLI, 7 GitHub Copilot CLI). Estado de cada uma: [`docs/guia-ias.md`](docs/guia-ias.md). Windows: [`docs/teste-windows.md`](docs/teste-windows.md).
 4. **Extensão do navegador:** um clique seu, uma vez (`chrome://extensions` → Carregar sem compactação → `~/.promptshield/extension`).
 5. **Atualizar o servidor:** `git pull` e `docker compose up -d --build` (as migrações rodam sozinhas ao subir). Faça backup antes ([`docs/operacao.md`](docs/operacao.md)); nunca use `docker compose down -v`.
 

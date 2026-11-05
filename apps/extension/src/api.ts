@@ -7,14 +7,17 @@ export interface PromptInput {
   files?: { name: string; size: number; type: string }[];
 }
 
+/** Sites vistos funcionando pelo dono numa máquina real (2026-11-04): PARCIAL (os seletores dependem do HTML do site e podem mudar). REAL exigiria documentação oficial, que raspagem de HTML não tem. Os demais seguem EXPERIMENTAIS. */
+export const TESTED_APPS = ["chatgpt_web", "gemini_web"];
+export const integrationStatus = (app: string) => (TESTED_APPS.includes(app) ? "partial" : "experimental");
+
 export function buildEvent(input: PromptInput, cfg: FullConfig, installId: string, profileEmail: string, now = new Date()) {
   const actor: Record<string, unknown> = { user_id: profileEmail || cfg.userId || "desconhecido", device_id: installId };
   if (cfg.department) actor.department = cfg.department;
   return {
     event_id: crypto.randomUUID(),
     occurred_at: now.toISOString(),
-    // integração por extensão: EXPERIMENTAL (seletores dos sites não verificados contra as páginas reais)
-    source: { channel: "browser", app: input.app, integration_status: "experimental" },
+    source: { channel: "browser", app: input.app, integration_status: integrationStatus(input.app) },
     actor,
     kind: input.text.trim() || !input.files?.length ? "prompt" : "file_upload",
     // arquivos: só nome, tamanho e tipo. O conteúdo do arquivo nunca é lido pela extensão.

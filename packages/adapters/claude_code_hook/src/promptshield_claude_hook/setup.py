@@ -5,16 +5,19 @@
 O que cada opção faz de verdade (nada é instalado sem você confirmar):
   1  Claude Code: grava ~/.promptshield/hook.json e acrescenta os hooks ao ~/.claude/settings.json (com cópia de segurança).
   2  GitHub Copilot CLI: grava ~/.copilot/hooks/promptshield.json (arquivo só nosso). EXPERIMENTAL; o Copilot no VS Code não é coberto.
-  3  Codex (OpenAI): NÃO disponível. Há hooks no Codex, mas o formato não pôde ser lido na documentação oficial: A VERIFICAR.
-  3  ChatGPT e Claude no navegador: guia da extensão (o navegador não permite instalar sozinho).
-  5  Abre o console no navegador.   6 Testa a conexão.   7 Remove os vínculos (Claude Code e Copilot).
-Status honesto: o hook do Claude Code é PARCIAL; Desktop (aba Code) e VS Code: A VERIFICAR; o chat do app Claude Desktop não é coberto.
+  3  Codex CLI: acrescenta os hooks ao ~/.codex/hooks.json (com cópia de segurança). EXPERIMENTAL: o Codex exige que você confie neles em /hooks.
+  4  ChatGPT, Gemini, Copilot e Claude no navegador: guia da extensão (o navegador não permite instalar sozinho).
+  5  Abre o console no navegador.   6 Testa a conexão.   7 Remove os vínculos (Claude Code, Codex e Copilot).
+  9  Diagnóstico (doctor): roda os hooks instalados como cada CLI roda, com texto sintético, e mostra a causa de uma falha.
+Status honesto: o hook do Claude Code é PARCIAL; Codex CLI e Copilot CLI são EXPERIMENTAIS; apps de desktop não são cobertos.
 """
 from __future__ import annotations
 
 import getpass
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -45,10 +48,34 @@ def codex_hooks_path() -> Path:
     return Path.home() / ".codex" / "hooks.json"     # documentado: ~/.codex/hooks.json (CODEX_HOME: A VERIFICAR, por isso não usado)
 
 
+_SAFE_ARG = re.compile(r"[\w./:\\@%+=,~-]+")
+
+
+def _bare_python(exe: str) -> str | None:
+    """`python`/`python3` sem caminho, se o PATH resolve para este mesmo executável (vale em cmd, PowerShell e sh).
+    Nunca dentro de um venv: o `python` do PATH aponta para o mesmo arquivo, mas NÃO enxerga os pacotes do venv ("No module named ...")."""
+    if sys.prefix != getattr(sys, "base_prefix", sys.prefix):
+        return None
+    for name in (("python",) if os.name == "nt" else ("python3", "python")):
+        found = shutil.which(name)
+        if found and os.path.realpath(found) == os.path.realpath(exe):
+            return name
+    return None
+
+
+def shell_neutral(exe: str, args: list[str]) -> str:
+    """Linha de comando que o cmd.exe, o PowerShell e o sh entendem. Um comando que COMEÇA com texto entre aspas é erro de sintaxe no
+    PowerShell (precisaria de `&`, que o cmd não entende): por isso o executável vai sem aspas (nome no PATH, ou caminho sem espaços);
+    os argumentos com espaço, entre aspas, valem nos três. Só sobra o caso de um caminho do Python COM espaços e fora do PATH: aí cai
+    no formato do cmd e o `doctor` avisa."""
+    first = _bare_python(exe) or (exe if _SAFE_ARG.fullmatch(exe) else f'"{exe}"')
+    return " ".join([first] + [a if _SAFE_ARG.fullmatch(a) else f'"{a}"' for a in args])
+
+
 def codex_command() -> str:
     """Uma linha de comando (o Codex usa `command` como texto, não lista de argumentos)."""
     exe, args = self_command()
-    return " ".join([f'"{exe}"'] + [f'"{a}"' for a in args] + ["--codex"])
+    return shell_neutral(exe, [*args, "--codex"])
 
 
 def merge_codex(data: dict[str, Any]) -> dict[str, Any]:
@@ -332,22 +359,25 @@ class Wizard:
         self.say(f"Abrindo {url} no navegador (o túnel precisa estar aberto).")
 
     def remove(self) -> None:
-        path = claude_settings_path()
+        path, cop, cdx = claude_settings_path(), copilot_hooks_path(), codex_hooks_path()
         try:
             data = read_settings(path)
+            cdata = read_settings(cdx) if cdx.is_file() else {}
         except (OSError, ValueError) as exc:
-            self.say(f"Não consegui ler {path}: {exc}")
+            self.say(f"Não consegui ler os arquivos de hooks: {exc}")
             return
-        cop = copilot_hooks_path()
-        if not is_installed(data) and not cop.is_file():
+        has_codex = bool(cdata) and json.dumps(remove_ours(json.loads(json.dumps(cdata)))) != json.dumps(cdata)
+        if not is_installed(data) and not cop.is_file() and not has_codex:
             self.say("Nada vinculado.")
             return
-        if not self.yes("Remover os hooks do PromptShield (Claude Code e Copilot CLI)?"):
+        if not self.yes("Remover os hooks do PromptShield (Claude Code, Codex CLI e Copilot CLI)?"):
             self.say("Cancelado.")
             return
         backup = None
         if is_installed(data):
             backup = write_settings(path, remove_ours(data))
+        if has_codex:
+            write_settings(cdx, remove_ours(cdata))
         if cop.is_file():
             cop.unlink()
         self.say(f"Removido. Cópia do settings.json anterior: {backup}\nA chave continua em {config.user_config_path()}: apague-a e revogue a chave no console ao terminar.")
@@ -401,15 +431,19 @@ class Wizard:
         for n in nums:
             self.say(f"  {n}) {ias.BY_N[n].name}: {results[n]}")
 
+    def doctor(self) -> None:
+        from . import doctor
+        doctor.main([])
+
     def run(self) -> int:
         self.say("PromptShield: vincular ferramentas (pode repetir quantas vezes quiser)")
-        actions = {"1": self.claude_code, "2": self.copilot, "3": self.codex, "4": self.extension, "5": self.open_console, "6": self.test, "7": self.remove, "8": self.choose}
+        actions = {"1": self.claude_code, "2": self.copilot, "3": self.codex, "4": self.extension, "5": self.open_console, "6": self.test, "7": self.remove, "8": self.choose, "9": self.doctor}
         while True:
             self.status()
-            self.say("\n  1) Claude Code (terminal; Desktop aba Code e VS Code: a verificar)\n  2) GitHub Copilot CLI (experimental)\n"
-                     "  3) Codex (OpenAI)  [indisponível: a verificar]\n  4) ChatGPT e Claude no navegador (extensão)\n"
-                     "  5) Abrir o console no navegador\n  6) Testar a conexão\n  7) Remover os vínculos (Claude Code e Copilot)\n"
-                     "  8) ESCOLHER quais IAs monitorar (por números, com passo a passo)\n  0) Sair")
+            self.say("\n  1) Claude Code (terminal)\n  2) GitHub Copilot CLI (experimental)\n"
+                     "  3) Codex CLI (experimental)\n  4) ChatGPT, Gemini, Copilot e Claude no navegador (extensão)\n"
+                     "  5) Abrir o console no navegador\n  6) Testar a conexão\n  7) Remover os vínculos (Claude Code, Codex e Copilot)\n"
+                     "  8) ESCOLHER quais IAs monitorar (por números, com passo a passo)\n  9) Diagnóstico (doctor): por que um CLI não enviou?\n  0) Sair")
             try:
                 choice = self.ask("Escolha: ").strip()
             except (EOFError, KeyboardInterrupt):

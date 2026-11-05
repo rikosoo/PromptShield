@@ -13,9 +13,31 @@ import json
 import sys
 from pathlib import Path
 
-from . import client, config, decide, spool, translate
+from . import client, config, decide, hooklog, spool, translate
 
 MAX_STDIN = 20 * 1024 * 1024
+ADMIN = ("check", "refresh-config", "deploy", "setup", "import", "doctor")
+
+
+def _read_stdin() -> str:
+    """UTF-8 sempre (no Windows o padrão é a página de código do console e quebra com certos caracteres)."""
+    try:
+        return sys.stdin.buffer.read(MAX_STDIN).decode("utf-8", errors="replace").lstrip("\ufeff")
+    except (AttributeError, OSError, ValueError):
+        return sys.stdin.read(MAX_STDIN)
+
+
+def _emit(out: dict) -> None:
+    """JSON só com ASCII (\\uXXXX): nenhum console, em nenhuma página de código, falha ao escrever."""
+    sys.stdout.write(json.dumps(out, ensure_ascii=True) + "\n")
+    sys.stdout.flush()
+
+
+def _err(msg: str) -> None:
+    try:
+        sys.stderr.write(msg + "\n")
+    except (UnicodeError, OSError, ValueError):
+        pass
 
 
 def run_hook(raw: str, cfg: config.Config, app: str = "claude_code") -> dict | None:
@@ -27,6 +49,8 @@ def run_hook(raw: str, cfg: config.Config, app: str = "claude_code") -> dict | N
         hook_event = str(data.get("hook_event_name", "desconhecido"))
         event = translate.build_event(data, cfg, app)
         if event is None:
+            if app == "codex_cli":       # formato do Codex ainda A VERIFICAR: registra quais campos chegaram (sem valores) para ajustarmos
+                hooklog.record(app, hook_event, "evento ignorado (nome não suportado ou sem texto do prompt)", keys=list(data) if isinstance(data, dict) else [])
             return None
         result = client.post_event(cfg, event)
         return decide.render(hook_event, result)
@@ -36,7 +60,8 @@ def run_hook(raw: str, cfg: config.Config, app: str = "claude_code") -> dict | N
         mode = "open" if stopped else cfg.fail_mode          # inspeção parada pela licença nunca trava o trabalho da pessoa, mesmo em fail_mode closed
         if mode != "closed" and not stopped:
             spool.record(cfg.spool_path, hook_event, event, reason)
-        print(f"promptshield: {reason}; modo de falha: {mode}", file=sys.stderr)
+        _err(f"promptshield: {reason}; modo de falha: {mode}")
+        hooklog.record(app, hook_event, reason, exc)
         return decide.render_failure(hook_event, mode, reason)
 
 
@@ -54,7 +79,8 @@ def run_copilot(event_name: str, raw: str, cfg: config.Config) -> dict | None:
         mode = "open" if stopped else cfg.fail_mode
         if mode != "closed" and not stopped:
             spool.record(cfg.spool_path, event_name, event, reason)
-        print(f"promptshield: {reason}; modo de falha: {mode}", file=sys.stderr)
+        _err(f"promptshield: {reason}; modo de falha: {mode}")
+        hooklog.record("github_copilot_cli", event_name, reason, exc)
         return decide.render_copilot_failure(event_name, mode, reason)
 
 
@@ -89,30 +115,42 @@ def cmd_refresh(cfg: config.Config) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = sys.argv[1:] if argv is None else argv
+def _hook_main(args: list[str]) -> int:
     cfg = config.load()
-    if args and args[0] == "check":
-        return cmd_check(cfg)
-    if args and args[0] == "refresh-config":
-        return cmd_refresh(cfg)
-    if args and args[0] == "deploy":
-        from . import deploy
-        return deploy.main(args[1:])
-    if args and args[0] == "setup":
-        from . import setup
-        return setup.main()
-    if args and args[0] == "import":
-        from . import importer
-        return importer.main(args[1:], cfg)
     if len(args) >= 2 and args[0] == "--copilot":
-        out = run_copilot(args[1], sys.stdin.read(MAX_STDIN), cfg)
+        out = run_copilot(args[1], _read_stdin(), cfg)
         if out is not None:
-            print(json.dumps(out, ensure_ascii=False))
+            _emit(out)
         return 0
     app = "codex_cli" if args and args[0] == "--codex" else "claude_code"      # o Codex usa o mesmo esquema de eventos; só o rótulo da IA muda
-    raw = sys.stdin.read(MAX_STDIN)
-    out = run_hook(raw, cfg, app)
+    out = run_hook(_read_stdin(), cfg, app)
     if out is not None:
-        print(json.dumps(out, ensure_ascii=False))
+        _emit(out)
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if args and args[0] in ADMIN:
+        cfg = config.load()
+        if args[0] == "check":
+            return cmd_check(cfg)
+        if args[0] == "refresh-config":
+            return cmd_refresh(cfg)
+        if args[0] == "deploy":
+            from . import deploy
+            return deploy.main(args[1:])
+        if args[0] == "setup":
+            from . import setup
+            return setup.main()
+        if args[0] == "doctor":
+            from . import doctor
+            return doctor.main(args[1:])
+        from . import importer
+        return importer.main(args[1:], cfg)
+    try:
+        return _hook_main(args)
+    except Exception as exc:  # noqa: BLE001 - um hook NUNCA pode sair com código diferente de 0 por defeito nosso: o CLI mostraria "Hook failed"
+        hooklog.record("hook", args[0] if args else "", "falha inesperada antes de enviar", exc)
+        _err(f"promptshield: erro interno ({type(exc).__name__}); veja {hooklog.log_path()}")
+        return 0

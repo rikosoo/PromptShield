@@ -269,12 +269,12 @@ def test_one_line_installer_served_by_the_api_installs_a_working_sensor(client, 
     home = tmp_path / "home"
     home.mkdir()
     env = {**os.environ, "HOME": str(home), "PS_API": live, "PS_TOKEN": tok, "PS_NOTIFIED": "1",
-           "PS_IAS": "6, 9,1,7"}        # escolha por números: Claude Code, Copilot CLI, extensão (ChatGPT web) e Codex CLI (manual)
+           "PS_IAS": "5, 7,1,6"}        # escolha por números: Claude Code, Copilot CLI, extensão (ChatGPT web) e Codex CLI
     for k in ("CLAUDE_CONFIG_DIR", "COPILOT_HOME", "PROMPTSHIELD_HOOK_CONFIG", "PROMPTSHIELD_API_URL", "PROMPTSHIELD_API_KEY"):
         env.pop(k, None)
     p = subprocess.run(["sh", "-c", 'curl -fsSL "$PS_API/sensor/install.sh" | sh'], capture_output=True, text=True, env=env, timeout=90)
     assert p.returncode == 0, p.stdout + p.stderr
-    assert "[7] Codex (CLI): AUTOMÁTICO" in p.stdout and "Passo a passo de cada IA escolhida" in p.stdout
+    assert "[6] Codex (CLI): AUTOMÁTICO" in p.stdout and "Passo a passo de cada IA escolhida" in p.stdout
     settings = json.loads((home / ".claude" / "settings.json").read_text())
     entry = settings["hooks"]["PreToolUse"][0]["hooks"][0]
     assert entry["args"][0].endswith("promptshield-sensor.pyz")                    # o hook chama o sensor baixado
@@ -285,6 +285,15 @@ def test_one_line_installer_served_by_the_api_installs_a_working_sensor(client, 
     hp = subprocess.run([entry["command"], *entry["args"]], input=json.dumps(payload), capture_output=True, text=True, env=env, timeout=30)
     assert hp.returncode == 0, hp.stderr
     assert any(c["id"] == "pii" for c in events(client, world)[0]["categories"])
+    # o comando que o instalador gravou para o CODEX, rodado como o Codex o rodaria (uma linha de shell, JSON na entrada, texto com acentos):
+    # tem de sair com 0 e o evento tem de chegar como codex_cli
+    cdx = json.loads((home / ".codex" / "hooks.json").read_text())["hooks"]["UserPromptSubmit"][0]["hooks"][0]
+    assert not cdx["command"].startswith('"') and cdx["command"].endswith(" --codex") and cdx["commandWindows"] == cdx["command"]
+    cpayload = json.dumps({"session_id": "cdx-1", "hook_event_name": "UserPromptSubmit", "prompt": "SIMULADO: meu CPF è 529.982.247-25"}, ensure_ascii=False)
+    cp = subprocess.run(cdx["command"], shell=True, input=cpayload.encode("utf-8"), capture_output=True, env=env, timeout=30)   # noqa: S602
+    assert cp.returncode == 0, cp.stderr.decode("utf-8", "replace")
+    codex_ev = [e for e in events(client, world) if e["app"] == "codex_cli"]
+    assert len(codex_ev) == 1 and any(c["id"] == "pii" for c in codex_ev[0]["categories"]) and "529.982.247-25" not in codex_ev[0]["masked_text"]
     d = client.get("/v1/devices", headers=world.user("leitura")).json()
     assert d["active"] == 1 and set(d["coverage"]) == {"claude_code", "github_copilot_cli", "codex_cli", "browser_extension"}
     if (ext_dist / "manifest.json").exists():
