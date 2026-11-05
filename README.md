@@ -36,9 +36,11 @@ sensor na máquina → evento universal → motor de detecção → política �
 
 ## O que o console mostra
 
+O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuários e grupos**, **Políticas** e **Administração**. Usuários e grupos hoje só tem *Risco por usuário*; grupos, exceções e listas permitidas ainda não existem como telas.
+
 | Tela | Para quê |
 |---|---|
-| Visão geral | totais, risco alto, série por dia, departamentos, ferramentas |
+| Visão geral | totais, risco alto, série por dia, departamentos, ferramentas e **confiabilidade**: taxa de falso positivo / faltou pegar (revisão humana) e **cobertura dos coletores** (por IA: capturando, parou, aguardando), para o painel não passar falsa sensação de segurança |
 | **Todos os prompts** | tudo que foi capturado, quem escreveu, filtros por pessoa, palavra-chave (prompt ou nome de arquivo), ferramenta, categoria, decisão, departamento, período, revisão; exportação CSV (admin/auditor, auditada) |
 | Análise de prompts | do mais arriscado ao menos, com sinais clicáveis (segredos, o que as pessoas pedem) |
 | Incidentes | fila e triagem; texto original só com justificativa e auditoria |

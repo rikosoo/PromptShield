@@ -1,11 +1,73 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { AppUsage, DailyBars } from "@/components/charts";
 import { BarList, ErrorBox, Kpi, Loading, Panel } from "@/components/ui";
 import { api, useLoad } from "@/lib/api";
 import { appLabel } from "@/lib/labels";
-import type { Overview } from "@/lib/types";
+import { collectorHealth, detectionHealth, LEVEL_LABEL, type HealthLevel } from "@/lib/health";
+import type { DevicesOut, Overview, QualitySummary } from "@/lib/types";
 import { useTaxonomy } from "@/lib/useTaxonomy";
+
+const LEVEL_CLASS: Record<HealthLevel, string> = {
+  ok: "border-low bg-low-bg text-low", warn: "border-med bg-med-bg text-med", crit: "border-crit bg-crit-bg text-crit", unknown: "border-line text-muted",
+};
+const pct = (n: number | null) => (n === null ? "—" : `${Math.round(n * 100)}%`);
+
+function LevelTag({ level }: { level: HealthLevel }) {
+  return <span className={`rounded-full border px-2 py-0.5 font-mono text-xs ${LEVEL_CLASS[level]}`}>{LEVEL_LABEL[level]}</span>;
+}
+
+/** Confiabilidade do painel: falso positivo e cobertura dos coletores, para não passar falsa sensação de segurança. */
+function Reliability({ days }: { days: number }) {
+  const quality = useLoad(() => api<QualitySummary>(`v1/feedback/summary?days=${days}`), [days]);
+  const devices = useLoad(() => api<DevicesOut>("v1/devices"), []);
+  const det = detectionHealth(quality.data);
+  const col = devices.data ? collectorHealth(devices.data.devices, new Date()) : null;
+  return (
+    <div className="grid gap-4 xl:grid-cols-2" data-testid="reliability">
+      <Panel title="Qualidade da detecção (falsos positivos)" action={<LevelTag level={det.level} />}>
+        {quality.loading && !quality.data && <Loading />}
+        {quality.error && <p className="text-sm text-muted">Indisponível para o seu perfil ou sem dados de revisão.</p>}
+        {quality.data && (
+          <>
+            <dl className="grid grid-cols-3 gap-3">
+              <div><dt className="text-xs text-muted">Falso positivo</dt><dd className="font-mono text-2xl font-semibold" data-testid="fp-rate">{pct(det.falsePositiveRate)}</dd></div>
+              <div><dt className="text-xs text-muted">Faltou pegar</dt><dd className="font-mono text-2xl font-semibold">{pct(det.missedRate)}</dd></div>
+              <div><dt className="text-xs text-muted">Revisado</dt><dd className="font-mono text-2xl font-semibold">{pct(det.reviewCoverage)}</dd></div>
+            </dl>
+            <p className="mt-2 text-xs text-muted">{det.note} <Link href="/quality" className="underline">Ver por categoria</Link></p>
+          </>
+        )}
+      </Panel>
+      <Panel title="Cobertura dos coletores" action={col && <LevelTag level={col.level} />}>
+        {devices.loading && !devices.data && <Loading />}
+        {devices.error && <ErrorBox message={devices.error} onRetry={devices.reload} />}
+        {col && (
+          <>
+            <p className="mb-2 text-sm" data-testid="collector-summary">
+              {col.sensors.total} sensor(es): {col.sensors.ativo} ativo(s), {col.sensors.inativo + col.sensors.nunca} inativo(s)/nunca enviou.
+              {col.confirmedCoverage !== null && <> Cobertura confirmada: <strong>{pct(col.confirmedCoverage)}</strong> das IAs habilitadas enviaram evento nos últimos 7 dias.</>}
+            </p>
+            {col.rows.length === 0 ? <p className="text-sm text-muted">Nenhuma IA com coleta habilitada ainda.</p> : (
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-muted"><th className="py-1">IA</th><th>Habilitada</th><th>Capturando</th><th>Parou</th><th>Aguardando</th><th /></tr></thead>
+                <tbody>
+                  {col.rows.map((r) => (
+                    <tr key={r.id} className="border-t border-line">
+                      <td className="py-1">{r.label}</td><td>{r.enabled}</td><td>{r.capturing}</td><td>{r.stopped}</td><td>{r.waiting}</td><td><LevelTag level={r.level} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="mt-2 text-xs text-muted">{col.note} <Link href="/sensors" className="underline">Ver sensores</Link></p>
+          </>
+        )}
+      </Panel>
+    </div>
+  );
+}
 
 export default function OverviewPage() {
   const [days, setDays] = useState(14);
@@ -38,6 +100,7 @@ export default function OverviewPage() {
             <Kpi label="Bloqueados" value={data.totals.blocked} />
             <Kpi label="Seriam bloqueados" value={data.totals.would_block} hint="políticas em monitorar" />
           </div>
+          <Reliability days={days} />
           <div className="grid gap-4 xl:grid-cols-2">
             <Panel title="Eventos de alto risco por dia"><DailyBars daily={data.daily} threshold={data.high_risk_threshold} /></Panel>
             <Panel title="Uso por ferramenta"><AppUsage rows={data.by_app} label={appLabel} /></Panel>

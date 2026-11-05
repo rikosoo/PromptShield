@@ -7,22 +7,13 @@ import { licenseNotice } from "@/lib/license";
 import { ROLE_LABEL } from "@/lib/labels";
 import { SessionProvider, useSession } from "./session";
 
-const NAV = [
-  { href: "/", label: "Visão geral" },
-  { href: "/history", label: "Todos os prompts" },
-  { href: "/prompts", label: "Análise de prompts" },
-  { href: "/incidents", label: "Incidentes" },
-  { href: "/quality", label: "Qualidade da detecção" },
-  { href: "/risk", label: "Risco por usuário" },
-  { href: "/alerts", label: "Alertas e SIEM" },
-  { href: "/reports", label: "Relatórios" },
-  { href: "/sensors", label: "Sensores" },
-  { href: "/devices", label: "Dispositivos" },
-  { href: "/license", label: "Licença" },
-  { href: "/inference-hooks", label: "Inference hooks" },
-  { href: "/pilot", label: "Piloto" },
-  { href: "/privacy", label: "Privacidade e segurança" },
-  { href: "/policies", label: "Políticas" },
+/** As cinco áreas do console. Cada página existente fica no grupo a que pertence. */
+const NAV_GROUPS = [
+  { title: "Visão geral", items: [{ href: "/", label: "Visão geral" }, { href: "/prompts", label: "Análise de prompts" }, { href: "/reports", label: "Relatórios" }] },
+  { title: "Incidentes", items: [{ href: "/incidents", label: "Incidentes" }, { href: "/alerts", label: "Alertas e SIEM" }, { href: "/history", label: "Todos os prompts" }, { href: "/quality", label: "Qualidade da detecção" }] },
+  { title: "Usuários e grupos", items: [{ href: "/risk", label: "Risco por usuário" }] },
+  { title: "Políticas", items: [{ href: "/policies", label: "Políticas" }] },
+  { title: "Administração", items: [{ href: "/sensors", label: "Sensores" }, { href: "/devices", label: "Dispositivos" }, { href: "/license", label: "Licença" }, { href: "/privacy", label: "Privacidade e segurança" }, { href: "/inference-hooks", label: "Inference hooks" }, { href: "/pilot", label: "Piloto" }] },
 ];
 
 function ThemeToggle() {
@@ -52,19 +43,26 @@ function Frame({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[14rem_minmax(0,1fr)]">
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-panel focus:px-3 focus:py-2">Pular para o conteúdo</a>
-      <nav aria-label="Principal" className="bg-nav px-3 py-3 text-nav-fg lg:sticky lg:top-0 lg:h-screen lg:py-4">
+      <nav aria-label="Principal" className="bg-nav px-3 py-3 text-nav-fg lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:py-4">
         <div className="mb-2 px-2 text-base font-bold text-white lg:mb-4">PromptShield</div>
-        <ul className="flex flex-wrap gap-1 lg:flex-col">
-          {NAV.map((n) => {
-            const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
-            return (
-              <li key={n.href}>
-                <Link href={n.href} aria-current={active ? "page" : undefined}
-                  className={`block rounded-md px-3 py-2 text-sm hover:bg-nav-act hover:text-white ${active ? "bg-nav-act font-semibold text-white" : ""}`}>{n.label}</Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="flex flex-wrap gap-x-4 lg:block">
+          {NAV_GROUPS.map((g) => (
+            <div key={g.title} className="lg:mb-3">
+              <div className="hidden px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-nav-fg lg:block">{g.title}</div>
+              <ul className="flex flex-wrap gap-1 lg:flex-col">
+                {g.items.map((n) => {
+                  const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
+                  return (
+                    <li key={n.href}>
+                      <Link href={n.href} aria-current={active ? "page" : undefined}
+                        className={`block rounded-md px-3 py-1.5 text-sm hover:bg-nav-act hover:text-white ${active ? "bg-nav-act font-semibold text-white" : ""}`}>{n.label}</Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
       </nav>
       <div className="min-w-0">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-panel px-4 py-3 md:px-6">
