@@ -5,8 +5,8 @@ Dois passos. Status: **EXPERIMENTAL**. O servidor foi usado numa VM de teste; o 
 ## Passo 1: o servidor (uma vez, em uma VM)
 
 ```bash
-git clone https://github.com/rikosoo/AgenticIASec.git && cd AgenticIASec
-git checkout claude/wonderful-hamilton-9dsk59
+git clone https://github.com/rikosoo/PromptShield.git && cd PromptShield
+git checkout claude/nifty-hopper-y3ddn0
 ./infra/vm-setup.sh --admin-email voce@empresa.com
 # opcional, para abrir o console e a API sem túnel (leia os avisos do script; limite as portas ao seu IP no firewall):
 ./infra/expose.sh --public-ip IP_DA_VM --web --api

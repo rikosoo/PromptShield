@@ -20,9 +20,9 @@ O `make` não existe no Windows. Os comandos abaixo são os equivalentes, em Pow
 ## Passo 0: subir tudo
 
 ```powershell
-git clone https://github.com/rikosoo/AgenticIASec.git
-cd AgenticIASec
-git checkout claude/wonderful-hamilton-9dsk59
+git clone https://github.com/rikosoo/PromptShield.git
+cd PromptShield
+git checkout claude/nifty-hopper-y3ddn0
 Copy-Item .env.example .env
 ```
 

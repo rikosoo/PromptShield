@@ -24,8 +24,8 @@ Com o hook ligado, o que você digita no Claude Code e as ações dele passam a 
 Na VM (Debian ou Ubuntu, com Git; o script instala o Docker se faltar):
 
 ```bash
-git clone https://github.com/rikosoo/AgenticIASec.git && cd AgenticIASec
-git checkout claude/wonderful-hamilton-9dsk59
+git clone https://github.com/rikosoo/PromptShield.git && cd PromptShield
+git checkout claude/nifty-hopper-y3ddn0
 ./infra/vm-setup.sh --admin-email voce@exemplo.com
 ```
 
@@ -48,7 +48,7 @@ Se o túnel cair, o hook segue em `fail_mode: open` (grava só metadados localme
 Se você preferir acessar por `http://IP_PUBLICO:3000`, limite as portas ao SEU IP no firewall da nuvem e rode na VM:
 
 ```bash
-git pull origin claude/wonderful-hamilton-9dsk59
+git pull origin claude/nifty-hopper-y3ddn0
 ./infra/expose.sh --public-ip IP_PUBLICO --web            # só o console (porta 3000)
 ./infra/expose.sh --public-ip IP_PUBLICO --web --api      # também a API (porta 8000)
 ./infra/expose.sh --close                                 # volta ao modo seguro (só túnel)

@@ -22,7 +22,7 @@ sensor na máquina → evento universal → motor de detecção → política �
 
 ## Como usar (resumo)
 
-1. **Servidor** (uma VM Linux com Docker): `./infra/vm-setup.sh --admin-email voce@empresa.com`. Guia: [`docs/guia-simples.md`](docs/guia-simples.md) e [`docs/teste-vm.md`](docs/teste-vm.md).
+1. **Servidor** (uma VM Linux com Docker): `./infra/vm-setup.sh --admin-email voce@empresa.com`. Guia: [`docs/guia-simples.md`](docs/guia-simples.md), [`docs/teste-vm.md`](docs/teste-vm.md) e, para a AWS (EC2) com os cliques do console, [`docs/instalacao-aws.md`](docs/instalacao-aws.md).
 2. **Console:** `http://IP_DA_VM:3000`. Em **Dispositivos**, crie um token de matrícula.
 3. **Sensor em cada máquina** (uma linha, sem administrador):
 
@@ -104,7 +104,7 @@ Docker com Compose (para `make up`). Para `make test` e `make lint` sem Docker: 
 ## Passo a passo
 
 ```bash
-git clone <este repositório> && cd AgenticIASec
+git clone <este repositório> && cd PromptShield
 make up        # cria .env a partir de .env.example, sobe db, api e web
 ```
 

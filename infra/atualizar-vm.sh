@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Atualiza o PromptShield numa VM (teste): backup -> git pull -> rebuild -> verificacao.
-# Uso:  bash infra/atualizar-vm.sh [branch]      (padrao: claude/wonderful-hamilton-9dsk59)
+# Uso:  bash infra/atualizar-vm.sh [branch]      (padrao: a branch em que a VM ja esta)
 # Nunca apaga o banco (nao usa "down -v").
 set -euo pipefail
 
-BRANCH="${1:-claude/wonderful-hamilton-9dsk59}"
 cd "$(dirname "$0")/.."
+BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
 
 # Sem permissao no socket do Docker? Usa sudo (ou: sudo usermod -aG docker $USER e entre de novo no SSH).
 if docker info >/dev/null 2>&1; then D="docker"; else D="sudo docker"; echo "(usando sudo para o docker)"; fi
@@ -49,7 +49,7 @@ done
 
 echo "== 5/5 Verificacao =="
 $DC ps
-echo "-- migracoes aplicadas (esperado ate 0017):"
+echo "-- migracoes aplicadas (esperado ate 0019):"
 LOGS=$($DC logs api 2>/dev/null || true)
 printf "%s\n" "$LOGS" | grep "Running upgrade" | tail -3 || true
 echo "-- versao do sensor servida:"
