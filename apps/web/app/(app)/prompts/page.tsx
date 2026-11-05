@@ -197,6 +197,7 @@ export default function PromptsPage() {
                         <Attachments row={p} compact />
                       </td>
                       <td className="td">{p.categories.filter((c) => c.id !== "produtividade_legitima").map((c) => <Chip key={c.id}>{name(c.id)}</Chip>)}
+                        {p.flags.has_code && p.kind === "prompt" && <span title="Código compartilhado: risco baixo, mas pode ser código sensível da empresa"><Chip>Código-fonte (pode ser sensível)</Chip></span>}
                         {(p.flags.intents ?? []).map((i) => <span key={i} className={`mr-1 text-xs ${i === "declara_confidencial" ? "font-semibold text-high" : "text-muted"}`}>{intentLabel(i)}</span>)}</td>
                       <td className="td"><RiskBar score={p.risk_score} /></td>
                       <td className="td"><SeverityTag severity={p.severity} /></td>

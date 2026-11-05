@@ -50,7 +50,7 @@ test("visão geral: indicadores iguais aos da API", async ({ page }) => {
   await expect(page.getByTestId("passive-badge")).toContainText("monitoramento passivo");
   expect(o.totals.events).toBeGreaterThan(50);
   expect(o.daily.reduce((a, d) => a + d.events, 0)).toBe(o.totals.events);
-  await expect(page.getByRole("img", { name: /Eventos de alto risco por dia/ })).toBeVisible();
+  await expect(page.getByLabel(/Eventos de alto risco por dia, últimos/)).toBeVisible();
   const dept = page.getByRole("list", { name: "Alto risco por departamento" });
   await expect(dept.getByRole("listitem")).toHaveCount(o.by_department.length);
   await expect(page.getByRole("list", { name: "Uso por ferramenta" })).toContainText("corporativa");

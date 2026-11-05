@@ -47,6 +47,24 @@ Biblioteca pura (`packages/detection`): sem rede, sem banco, sem LLM externo. Ro
 
 **Componente B** exige três partes: um substantivo do dicionário (token, chave de API, agência, conta, cartão, chave privada...), tolerando erro de digitação e abreviação; um conector (`:`, `=`, "é", "is", "es", "segue"...); e um valor com a forma de um segredo (mistura de letras e dígitos, entropia, tamanho). Sem valor ("como renovo meu token?"), com valor ofuscado pela própria pessoa (`4395****mfdw`) ou com placeholder, não há achado. **É um conjunto de regras sobre dicionário e forma do valor, não um modelo de linguagem**: "análise contextual" aqui significa isso.
 
+### Degraus de certeza (como uma declaração vira risco)
+
+Em vez de sim/não, o motor classifica em degraus. A **fraqueza do valor não tira o fato de a pessoa ter declarado uma senha**.
+
+| Degrau | Exemplo | Confiança | Faixa |
+|---|---|---|---|
+| Formato conhecido de fornecedor | `AKIA...`, `ghp_...`, JWT, chave privada | 0,95+ | Crítico |
+| Declaração + valor com forma de segredo | `meu token é 43954jjsed94523mfdw` | 0,85 | Crítico (piso) |
+| **Declaração + valor simples** | `minha senha e cfdsdfcxv`, `minha senha é 1234`, `meu token è xcfsdafd` | 0,55 a 0,65 | **Moderado** |
+| Menção sem valor, ou valor que é palavra comum | `como renovo meu token?`, `minha senha é forte`, `my password is required` | nenhuma | — |
+| Referência a variável ou placeholder | `password=${DB_PASSWORD}`, `COLE_O_TOKEN`, `API_KEY=` | nenhuma | — |
+
+Para senha vale "a senha do wifi é X" (sem "minha"); para token o degrau simples exige "meu/my/mi" ou `:`/`=`, porque "the token is redacted" é frase sobre token, não valor.
+
+### Código compartilhado
+
+Todo **prompt** (de pessoa) com código recebe risco **baixo (15, informativo)** com o achado `SOURCE_CODE_SHARED`: *"Código-fonte compartilhado: pode ser código sensível da empresa"*, impacto (propriedade intelectual, credenciais embutidas) e recomendação própria. Não vale para o código que o próprio agente escreve (`tool_call`). Se houver risco maior (credencial no código, cabeçalho proprietário), vale o maior, e o aviso de código continua aparecendo. O painel mostra o chip "Código-fonte (pode ser sensível)". Não cria categoria nova: a taxonomia segue com 30 categorias.
+
 ## 3. Detectores
 
 Já existiam (continuam): CPF, CNPJ, RG, telefone, e-mail, endereço, CEP, cartão com Luhn, IBAN, routing ABA, Pix (chave só de dígitos, UUID, e-mail), chaves AWS/GCP/Azure/GitHub/GitLab/Slack/Stripe/Anthropic/OpenAI/npm/PyPI/etc., JWT, Bearer, chave privada com cabeçalho, string de conexão, senha declarada, valor de alta entropia perto de palavra-chave, injection, jailbreak, extração de prompt, exfiltração, comandos de agente, infraestrutura (IP, host interno), arquivos anexados (só nome).
@@ -63,6 +81,8 @@ Já existiam (continuam): CPF, CNPJ, RG, telefone, e-mail, endereço, CEP, cart�
 | Pix com CPF/CNPJ | `chave pix: 529.982.247-25` (pessoal **e** financeiro) | `[CHAVE_PIX]` |
 | Corpo de chave privada | `chave privada: MIIE...` sem cabeçalho; base64 que começa com `MII` | `[CHAVE_PRIVADA]` |
 | Senha sem conector | `login admin senha T1yiWM8OCYAR` (só com 3 classes de caracteres) | `[SENHA]` |
+| Senha ou token com valor simples | `minha senha e cfdsdfcxv`, `meu password è djusahfed`, `a senha do wifi é roteador9` | `[SENHA]`, `[TOKEN]` |
+| Código compartilhado | trecho de código em prompt (Python, JS, Java, C, Go, shell, SQL...) | — (achado de risco baixo) |
 | Chaves do próprio PromptShield | `ps_<8 hex>_...`, `pse_<8 hex>_...` | `ps_****`, `pse_****` |
 | Download e execução | `irm ... | iex`, `curl ... | sh` em texto; pergunta ("o que faz? é seguro?") pesa menos que ordem ("rode") | — |
 | Injection em espanhol | `ignora todas las instrucciones anteriores` | — |
@@ -125,16 +145,15 @@ Medição: `python packages/detection/scripts/compare.py --out docs/medicoes/dep
 
 | Conjunto | Exatos | Precisão | Recall | Falso negativo | Falso positivo (negativos) | p50 / p95 ms |
 |---|---|---|---|---|---|---|
-| holdout_a (guiou ajuste) | 95.9% → 95.9% | 93.9% → 94.0% | 99.0% → 99.0% | 1.0% → 1.0% | 0.0% → 0.0% (0/67) | 0.7 / 1.23 |
-| holdout_b (guiou ajuste) | 97.9% → 97.9% | 96.7% → 96.7% | 100.0% → 100.0% | 0.0% → 0.0% | 0.0% → 0.0% (0/80) | 0.76 / 1.43 |
-| holdout_c (guiou ajuste) | 97.0% → 97.0% | 96.0% → 96.0% | 99.0% → 99.0% | 1.0% → 1.0% | 0.0% → 0.0% (0/76) | 0.74 / 1.5 |
-| holdout_d (independente) | 86.2% → 86.8% | 89.7% → 89.9% | 82.4% → 83.5% | 17.6% → 16.5% | 2.9% → 2.9% (2/70) | 0.92 / 1.97 |
-| holdout_e (guiou ajuste) | 96.3% → 96.3% | 97.2% → 97.2% | 98.6% → 98.6% | 1.4% → 1.4% | 0.0% → 0.0% (0/21) | 0.97 / 1.74 |
-| holdout_f (independente) | 90.2% → 90.2% | 98.9% → 98.9% | 87.6% → 87.6% | 12.4% → 12.4% | 0.0% → 0.0% (0/39) | 0.96 / 1.7 |
-| holdout_g (guiou ajuste) | 100.0% → 100.0% | 100.0% → 100.0% | 100.0% → 100.0% | 0.0% → 0.0% | 0.0% → 0.0% (0/22) | 1.03 / 1.48 |
-| holdout_h (independente) | 91.2% → 91.2% | 100.0% → 100.0% | 86.4% → 86.4% | 13.6% → 13.6% | 0.0% → 0.0% (0/25) | 0.9 / 1.41 |
-| holdout_i (guiou ajuste) | 69.8% → 100.0% | 100.0% → 100.0% | 61.3% → 100.0% | 38.7% → 0.0% | 0.0% → 0.0% (0/25) | 0.62 / 1.19 |
-
+| holdout_a (guiou ajuste) | 95.9% → 95.9% | 93.9% → 94.0% | 99.0% → 99.0% | 1.0% → 1.0% | 0.0% → 0.0% (0/67) | 0.35 / 0.68 |
+| holdout_b (guiou ajuste) | 97.9% → 97.9% | 96.7% → 96.7% | 100.0% → 100.0% | 0.0% → 0.0% | 0.0% → 0.0% (0/80) | 0.42 / 0.88 |
+| holdout_c (guiou ajuste) | 97.0% → 97.0% | 96.0% → 96.0% | 99.0% → 99.0% | 1.0% → 1.0% | 0.0% → 0.0% (0/76) | 0.41 / 0.96 |
+| holdout_d (independente) | 86.2% → 86.8% | 89.7% → 89.9% | 82.4% → 83.5% | 17.6% → 16.5% | 2.9% → 2.9% (2/70) | 0.41 / 1.03 |
+| holdout_e (guiou ajuste) | 96.3% → 96.3% | 97.2% → 97.2% | 98.6% → 98.6% | 1.4% → 1.4% | 0.0% → 0.0% (0/21) | 0.44 / 0.87 |
+| holdout_f (independente) | 90.2% → 91.0% | 98.9% → 98.9% | 87.6% → 88.6% | 12.4% → 11.4% | 0.0% → 0.0% (0/39) | 0.45 / 0.89 |
+| holdout_g (guiou ajuste) | 100.0% → 100.0% | 100.0% → 100.0% | 100.0% → 100.0% | 0.0% → 0.0% | 0.0% → 0.0% (0/22) | 0.47 / 0.65 |
+| holdout_h (independente) | 91.2% → 91.2% | 100.0% → 100.0% | 86.4% → 86.4% | 13.6% → 13.6% | 0.0% → 0.0% (0/25) | 0.41 / 0.68 |
+| holdout_i (guiou ajuste) | 69.8% → 100.0% | 100.0% → 100.0% | 61.3% → 100.0% | 38.7% → 0.0% | 0.0% → 0.0% (0/33) | 0.25 / 0.53 |
 
 **Por categoria (todos os conjuntos somados):**
 
@@ -165,13 +184,12 @@ Medição: `python packages/detection/scripts/compare.py --out docs/medicoes/dep
 | revisao_codigo | 7 | 0 | 1 | 100% → 100% | 88% → 88% | sim |
 | rh | 47 | 1 | 6 | 98% → 98% | 89% → 89% | sim |
 | saude | 40 | 0 | 1 | 100% → 100% | 98% → 98% | sim |
-| segredo | 114 | 0 | 2 | 100% → 100% | 81% → 98% | sim |
+| segredo | 122 | 0 | 1 | 100% → 100% | 81% → 99% | sim |
 | shell_destrutivo | 39 | 0 | 1 | 100% → 100% | 98% → 98% | sim |
 | sql | 8 | 1 | 0 | 89% → 89% | 100% → 100% | sim |
 | uso_pessoal | 37 | 0 | 3 | 100% → 100% | 92% → 92% | sim |
 
-
-Conclusão honesta: no conjunto novo (I) o recall de segredos foi de 42% para 100%, mas ele foi escrito depois do diagnóstico, então é otimista. Nos conjuntos independentes **não houve regressão**: D subiu de 86,2% para 86,8%; F (90,2%) e H (91,2%) ficaram iguais. A taxa de falso positivo nos negativos difíceis não piorou (0 de 25 em I). Latência: p50 abaixo de 1 ms e p95 abaixo de 2,5 ms por prompt.
+Conclusão honesta: no conjunto novo (I) o recall de segredos foi de 42% para 100%, mas ele foi escrito depois do diagnóstico, então é otimista. Nos conjuntos independentes **não houve regressão**: D subiu de 86,2% para 86,8%, F de 90,2% para 91,0%, H ficou em 91,2%. A taxa de falso positivo nos negativos difíceis não piorou (0 de 33 em I; 2 de 70 em D, como antes). Latência: p50 abaixo de 1 ms e p95 em cerca de 1 ms por prompt.
 
 ## 10. Implantação
 
@@ -187,6 +205,8 @@ Conclusão honesta: no conjunto novo (I) o recall de segredos foi de 42% para 10
 - **Regras, não semântica.** Frases sem substantivo do dicionário ("anota aí o negócio de acesso: X") passam. Erros de digitação além dos cobertos por padrão não são tolerados; espanhol cobre o dicionário escrito, não o idioma.
 - **Cartão com Luhn inválido em contexto** tem confiança menor (0,6) e pode alertar um número que não era cartão.
 - **Credencial genérica** (`token é X`) pode alertar um valor de teste que parece real; o analista confirma.
+- **Valor simples** (`minha senha é qwertyuiop`) alerta como moderado mesmo sendo um valor de teste; a lista de palavras comuns (pt, en, es) evita `minha senha é forte`, mas é uma lista, não um dicionário: uma palavra comum fora dela vira alerta moderado.
+- **Código**: o detector de "isso é código" é por padrões de linguagem; trecho curto ou em linguagem rara pode passar sem o aviso de código.
 - **Mascarar não é anonimizar:** o mascaramento é heurístico; o que não for reconhecido fica no banco.
 - **Passivo tem custo:** o PromptShield avisa depois do envio; um segredo enviado já chegou à ferramenta de IA.
 - **Hook do Codex no Windows:** a causa do "Hook failed" não foi confirmada (ver `docs/guia-ias.md`).

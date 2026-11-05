@@ -18,7 +18,8 @@ from ..validators import card_plausible, digits, entropy
 from .secrets import is_placeholder
 
 CONN = r"(?:\s*(?::|=>|=|->|—|–|-)\s*|\s+(?:e|eh|es|is|are|era|sera|seria|foi|was|segue|follows?|abaixo|below|aqui|here)\b\s*:?\s*)"
-FILL = r"(?:\s+(?:de|do|da|del|dos|das|of|for|para|pra|acesso|access|api|auth|bearer|banco|bancaria|bancario|bank|numero|number|no|n)){0,3}"
+FILL = (r"(?:\s+(?:de|do|da|del|dos|das|of|for|para|pra|acesso|access|api|auth|bearer|banco|bancaria|bancario|bank|numero|number|no|n|wifi|wi-fi|rede|email|e-mail|"
+        r"usuario|user|admin|root|servidor|server|sistema|system|app|github|aws|slack|vpn|notebook|computador|computer)){0,3}")
 
 SECRET_NOUN = (
     r"(?:tok[ea]?n{1,2}s?|toke|toke?m+s?|toquen|api[\s_-]?keys?|apikeys?"
@@ -61,6 +62,63 @@ def _secret_findings(t: str, f: str) -> list[Finding]:
             if not explicit:
                 conf = 0.8 if first_person else 0.7      # sem conector ("here is my api key X"): com "meu/my/mi" ainda é explícito
             out.append(Finding("segredo", min(conf, 0.92), "Possível token ou chave informado em contexto explícito", "declared_token", s, s + len(core), "[TOKEN]"))
+    return out
+
+
+# ---- degrau mais baixo: a pessoa DECLARA uma senha/token e o valor é simples ("minha senha é cfdsdfcxv") ----
+# A fraqueza do valor não muda o fato de que a pessoa digitou uma senha. Só fica de fora o que é palavra comum, adjetivo ou placeholder
+# ("minha senha é forte", "meu token é válido"). Confiança menor (moderado): pode ser um valor de teste.
+PASSWORD_NOUN = r"(?:senh+a+s?|passw(?:or)?d|passwd|pwd|passcode|contrasena|psw)"
+WEAK_PWD_RE = re.compile(rf"(?<![a-z0-9_])(?P<noun>{PASSWORD_NOUN}){FILL}{CONN}(?P<val>\S{{4,64}})")
+WEAK_TOKEN_RE = re.compile(rf"(?<![a-z0-9_])(?P<noun>{SECRET_NOUN}){FILL}{CONN}(?P<val>\S{{8,64}})")
+STOP = frozenset("""
+redacted masked removed hidden deleted revoked rotated missing empty null none undefined blank omitted obfuscated redigido redactado oculto removido apagado revogado vazio
+forte fraca fraco segura seguro simples longa longo curta curto dificil facil errada errado certa certo nova novo antiga antigo igual mesma mesmo diferente
+secreta secreto privada privado pessoal importante expirada expirou expirado bloqueada bloqueado salva salvo guardada guardado protegida protegido valida valido
+invalida invalido obrigatoria obrigatorio necessaria necessario gerada gerado criada criado alterada alterado esquecida esquecido perdida perdido muito pouco
+bastante sempre nunca nada tudo algo alguem ninguem aquela aquele essa esse esta este isso isto aquilo outra outro mesma tambem ainda agora depois antes
+strong weak safe simple long short hard easy wrong correct right new old same different secret private personal important expired blocked saved stored hashed
+encrypted required invalid valid forgotten generated created changed very little always never nothing everything something someone anyone that this those these
+fuerte debil segura sencilla larga corta dificil facil incorrecta correcta nueva vieja igual misma diferente secreta privada importante expirada bloqueada
+guardada obligatoria necesaria invalida valida olvidada generada creada cambiada muy poco siempre nunca nada todo algo alguien nadie aquella esa esta eso esto
+""".split())
+
+
+def _weak_ok(core: str, kind: str) -> bool:
+    from ..textnorm import fold
+    c = core.strip("'\"`.,;:!?()[]{}")
+    if not 4 <= len(c) <= 64 or "*" in c or "://" in c or "<" in c or "=" in c or is_placeholder(c) or c.lower() in FAKE_VALUES:
+        return False
+    if re.fullmatch(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+", c):
+        return False                      # nome de variável de ambiente (`DB_PASSWORD`), não o valor
+    if fold(c) in STOP or re.search(r"(?i)x{4,}|(.)\1{5,}", c):
+        return False
+    if re.search(r"[(){}\[\]$%<>]|(?i:environ|getenv|process\.env|\bconfig\.|\bsettings\.|\bsecrets?\.)", c):
+        return False                      # referência a variável ou expressão de código (`${DB_PASSWORD}`, `os.environ[...]`): não é o valor digitado
+    if c.isdigit():
+        return kind == "password" and 4 <= len(c) <= 12            # "minha senha é 1234": senha numérica é senha
+    if c.isalpha():
+        return len(c) >= (6 if kind == "password" else 8)          # uma palavra só, fora da lista de palavras comuns
+    return len(c) >= 6
+
+
+def _weak_findings(t: str, f: str) -> list[Finding]:
+    out: list[Finding] = []
+    for rx, kind, label, mask, typ in ((WEAK_PWD_RE, "password", "Possível senha informada (valor simples, sem forma de segredo forte)", "[SENHA]", "password"),
+                                        (WEAK_TOKEN_RE, "token", "Possível token informado (valor simples, sem forma de segredo forte)", "[TOKEN]", "declared_token")):
+        for m in rx.finditer(f):
+            s0, e0 = m.start("val"), m.end("val")
+            raw = t[s0:e0]
+            core = raw.strip("'\"`.,;:!?()[]{}")
+            if not _weak_ok(core, kind):
+                continue
+            lead = len(raw) - len(raw.lstrip("'\"`.,;:!?()[]{}"))
+            first_person = bool(POSSESSIVE.search(f[max(0, m.start("noun") - 30):m.start("noun")]))
+            explicit_sign = bool(re.search(r"[:=]", f[m.end("noun"):s0]))
+            if not (first_person or explicit_sign or kind == "password"):
+                continue                  # "the token is redacted" é frase SOBRE token; sem "meu/my/mi" nem ":"/"=" o valor simples não conta
+            conf = (0.55 if kind == "password" else 0.5) + (0.05 if first_person else 0)
+            out.append(Finding("segredo", conf, label, typ, s0 + lead, s0 + lead + len(core), mask))
     return out
 
 
@@ -135,4 +193,4 @@ def detect(ctx: Context) -> list[Finding]:
     if ctx.kind == "tool_call" or not ctx.text:
         return []
     t, f = ctx.text, ctx.folded
-    return _secret_findings(t, f) + _bank_findings(t, f) + _card_findings(t, f) + _pix_findings(t, f) + _privkey_findings(t, f)
+    return _secret_findings(t, f) + _weak_findings(t, f) + _bank_findings(t, f) + _card_findings(t, f) + _pix_findings(t, f) + _privkey_findings(t, f)

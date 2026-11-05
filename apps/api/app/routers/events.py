@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import PlainTextResponse
 from promptshield_detection.scoring import severity_for
-from sqlalchemy import Text, func, select
+from sqlalchemy import Text, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import cast
@@ -37,7 +37,7 @@ def event_filters(
     user_id: str | None = None,
     user_q: str | None = Query(None, min_length=1, max_length=100, description="parte do nome/e-mail da pessoa"),
     min_score: int = Query(0, ge=0, le=100),
-    category: str | None = Query(None, description="id da categoria da taxonomia"),
+    category: str | None = Query(None, pattern="^[a-z_]+(,[a-z_]+){0,9}$", description="id da categoria da taxonomia; vários separados por vírgula (qualquer uma delas)"),
     has_code: bool | None = None, has_sensitive: bool | None = None, agent_action: bool | None = None,
     only_blocked: bool = Query(False, description="decisão block, ou que seria block em modo monitorar"),
     decision: str | None = Query(None, pattern="^(allow|mask|block|ask_justification|alert)$", description="decisão tomada ou que seria tomada"),
@@ -82,7 +82,8 @@ def apply_filters(q, f: dict):
     if f["date_to"]:
         q = q.where(Event.occurred_at < datetime.combine(f["date_to"] + timedelta(days=1), time.min, tzinfo=timezone.utc))
     if f["category"]:
-        q = q.where(cast(Analysis.categories, JSONB).contains([{"id": f["category"]}]))
+        ids = f["category"].split(",")
+        q = q.where(or_(*[cast(Analysis.categories, JSONB).contains([{"id": c}]) for c in ids]))
     for key, flag in (("has_code", f["has_code"]), ("has_sensitive", f["has_sensitive"]), ("is_agent_action", f["agent_action"])):
         if flag is not None:
             q = q.where(cast(Analysis.flags, JSONB).contains({key: flag}))

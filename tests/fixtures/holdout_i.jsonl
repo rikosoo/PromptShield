@@ -94,3 +94,18 @@
 {"id": "hi0094", "group": "ofuscado", "lang": "pt", "kind": "prompt", "text": "meu cartão é 4111 **** **** 1111", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
 {"id": "hi0095", "group": "ofuscado", "lang": "pt", "kind": "prompt", "text": "meu cpf é 529.982.***-**", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
 {"id": "hi0096", "group": "ofuscado", "lang": "pt", "kind": "prompt", "text": "minha conta é ****456-6", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
+{"id": "hi0097", "group": "declaracao_valor_simples", "lang": "pt", "kind": "prompt", "text": "minha senha e cfdsdfcxv", "expected": ["segredo"], "hard_negative": false, "requires_ner": false, "has_name": false}
+{"id": "hi0098", "group": "declaracao_valor_simples", "lang": "en", "kind": "prompt", "text": "meu password è djusahfed", "expected": ["segredo"], "hard_negative": false, "requires_ner": false, "has_name": false}
+{"id": "hi0099", "group": "declaracao_valor_simples", "lang": "pt", "kind": "prompt", "text": "meu token è xcfsdafd asf", "expected": ["segredo"], "hard_negative": false, "requires_ner": false, "has_name": false}
+{"id": "hi0100", "group": "declaracao_valor_simples", "lang": "pt", "kind": "prompt", "text": "minha senha é 1234", "expected": ["segredo"], "hard_negative": false, "requires_ner": false, "has_name": false}
+{"id": "hi0101", "group": "declaracao_valor_simples", "lang": "en", "kind": "prompt", "text": "my password is qwertyuiop", "expected": ["segredo"], "hard_negative": false, "requires_ner": false, "has_name": false}
+{"id": "hi0102", "group": "declaracao_valor_simples", "lang": "es", "kind": "prompt", "text": "mi contraseña es contrasenita", "expected": ["segredo"], "hard_negative": false, "requires_ner": false, "has_name": false}
+{"id": "hi0103", "group": "declaracao_valor_simples", "lang": "pt", "kind": "prompt", "text": "a senha do wifi é roteador9", "expected": ["segredo"], "hard_negative": false, "requires_ner": false, "has_name": false}
+{"id": "hi0104", "group": "mencao_sem_valor", "lang": "pt", "kind": "prompt", "text": "minha senha é muito fraca", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
+{"id": "hi0105", "group": "mencao_sem_valor", "lang": "en", "kind": "prompt", "text": "my password is strong", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
+{"id": "hi0106", "group": "mencao_sem_valor", "lang": "es", "kind": "prompt", "text": "mi contraseña es incorrecta", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
+{"id": "hi0107", "group": "mencao_sem_valor", "lang": "pt", "kind": "prompt", "text": "meu token é válido", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
+{"id": "hi0108", "group": "mencao_sem_valor", "lang": "pt", "kind": "prompt", "text": "minha senha é a mesma do banco", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
+{"id": "hi0109", "group": "mencao_sem_valor", "lang": "en", "kind": "prompt", "text": "my password is required", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
+{"id": "hi0110", "group": "mencao_sem_valor", "lang": "pt", "kind": "prompt", "text": "minha senha é forte e longa", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}
+{"id": "hi0111", "group": "mencao_sem_valor", "lang": "pt", "kind": "prompt", "text": "meu token é o mesmo de ontem", "expected": [], "hard_negative": true, "requires_ner": false, "has_name": false}

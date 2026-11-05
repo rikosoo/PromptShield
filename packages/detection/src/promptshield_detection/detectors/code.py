@@ -7,7 +7,7 @@ from ..models import Context, Finding
 
 FENCE = re.compile(r"```")
 LANG_SIGNALS: dict[str, re.Pattern[str]] = {
-    "python": re.compile(r"^\s*(?:def \w+\(|class \w+[:(]|import \w+|from \w+ import |if __name__|(?<=\s)return\b)", re.M),
+    "python": re.compile(r"^\s*(?:def \w+\(|class \w+[:(]|import \w+|from \w+ import |if __name__|(?<=\s)return\b|for \w+ in [^\n]+:\s*$|while [^\n]+:\s*$|print\(|try:\s*$|except\b[^\n]*:\s*$|with [^\n]+ as \w+:\s*$)", re.M),
     "javascript": re.compile(r"\b(?:function \w+\(|const \w+ =|let \w+ =|=> \{|console\.log|require\()"),
     "typescript": re.compile(r"\b(?:interface \w+ \{|: (?:string|number|boolean)\b|export (?:const|function|type))"),
     "java": re.compile(r"\b(?:public (?:static )?(?:class|void)|System\.out\.println|import java\.)"),

@@ -27,6 +27,9 @@ ALERT_LEVEL = {"baixo": "informativo", "medio": "atencao", "alto": "alto", "crit
 # piso: credencial com esta confiança vale pelo menos este score, qualquer que seja o resto do prompt e o peso configurado
 CREDENTIAL_FLOORS = ((0.9, 75, "Credencial de alta confiança (piso crítico)"), (0.8, 70, "Credencial com contexto explícito (piso crítico)"))
 MAX_CORRELATION = 25
+# código compartilhado: risco BAIXO (faixa informativa), mas sempre sinalizado como possível código sensível da empresa
+CODE_SHARED_SCORE = 15
+CODE_SHARED_RULE = "Código-fonte compartilhado: pode ser código sensível da empresa"
 SECRET_SPANS = {"private_key", "private_key_body"}
 SENSITIVE_SPAN_CATEGORIES = {"segredo", "pii", "financeiro"}
 
@@ -71,7 +74,7 @@ def correlate(best: Mapping[str, Finding], findings: Iterable[Finding], has_code
 
 def score(best: dict[str, Finding], cats: dict[str, Category], is_agent_action: bool,
           personal_account: bool, *, findings: Iterable[Finding] = (), weights: Mapping[str, int] | None = None,
-          has_code: bool = False, external_url: bool = False) -> tuple[int, list[Reason]]:
+          has_code: bool = False, external_url: bool = False, code_shared: bool = False) -> tuple[int, list[Reason]]:
     contribs: list[tuple[float, str, str]] = []
     for cid, f in best.items():
         if f.confidence < THRESHOLD:
@@ -102,4 +105,7 @@ def score(best: dict[str, Finding], cats: dict[str, Category], is_agent_action: 
                     reasons.append(Reason(rule, round(floor - total), "segredo"))
                     total = float(floor)
                 break
+    if code_shared and total < CODE_SHARED_SCORE:
+        reasons.append(Reason(CODE_SHARED_RULE, round(CODE_SHARED_SCORE - total), "codigo_proprietario"))
+        total = float(CODE_SHARED_SCORE)
     return min(100, round(total)), reasons

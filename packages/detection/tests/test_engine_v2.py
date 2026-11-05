@@ -224,3 +224,66 @@ def test_achados_nao_repetem_valor_em_nenhum_campo_do_resultado():
         a = run(f"meu token é {s} e minha senha é {s} e conta 12 {s}")
         blob = json.dumps({"f": a.findings, "m": a.masked_text, "v2": from_analysis(a)}, ensure_ascii=False)
         assert s not in blob, s
+
+
+# código compartilhado: risco BAIXO, mas sempre com o aviso de que pode ser código sensível da empresa
+CODE_SNIPPETS = ["def soma(a, b):\n    return a + b\n\nprint(soma(1, 2))", "function dobro(x) { return x * 2; }\nconsole.log(dobro(3));", "public class Pedido {\n  private int id;\n}",
+                 "Aqui está meu código, o que acha?\n\nfor i in range(10):\n    print(i)"]
+
+
+@pytest.mark.parametrize("text", CODE_SNIPPETS)
+def test_code_shared_is_low_risk_but_always_flagged_as_possibly_company_code(text):
+    a = run(text)
+    assert a.risk["score"] == 15 and a.severity == "baixo" and a.alert_level == "informativo"
+    out = from_analysis(a)
+    assert out["severity"] == "low" and out["alert_level"] == "informational" and out["action"] == "monitor"
+    f = next(x for x in out["findings"] if x["type"] == "SOURCE_CODE_SHARED")
+    assert f["severity"] == "low" and "código sensível da empresa" in f["reason"] and "propriedade intelectual" in f["impact"]
+    assert "SOURCE_CODE_SHARED" in out["detected_categories"] and out["recommendation"].startswith("Risco baixo")
+    assert any("pode ser código sensível da empresa" in r["rule"] for r in a.risk["reasons"])
+
+
+def test_code_note_does_not_apply_to_plain_text_or_to_code_the_agent_writes_itself():
+    assert "SOURCE_CODE_SHARED" not in from_analysis(run("resuma este texto sobre café"))["detected_categories"]
+    agent = analyze({"kind": "tool_call", "content": {"tool_name": "Write", "text": "def soma(a, b):\n    return a + b\n", "tool_input": {"file_path": "a.py"}}})
+    assert "SOURCE_CODE_SHARED" not in {f["type"] for f in from_analysis(agent)["findings"]}
+
+
+def test_code_note_never_lowers_a_higher_risk_and_still_shows_with_it():
+    secret = run(f"revise este código:\nTOKEN = 'abc'\ndef f():\n    return 1\n\nmeu token é {TOKEN}")
+    assert secret.risk["score"] >= 70 and secret.severity == "critico"
+    assert "SOURCE_CODE_SHARED" in from_analysis(secret)["detected_categories"] and "POSSIBLE_API_TOKEN" in from_analysis(secret)["detected_categories"]
+    proprietary = run("# Copyright Acme Corp. Proprietary and confidential. Do not distribute.\ndef calcula_comissao(venda):\n    return venda * 0.07\n")
+    assert "codigo_proprietario" in cats(proprietary) and proprietary.risk["score"] > 15
+
+
+# degraus de certeza: declaração com valor SIMPLES é "moderado", menção sem valor é nada (prints do dono)
+@pytest.mark.parametrize("text,kind", [("minha senha e cfdsdfcxv", "senha"), ("meu password è djusahfed", "senha"), ("meu token è xcfsdafd asf", "token"),
+                                       ("minha senha é 1234", "senha"), ("my password is qwertyuiop", "senha"), ("mi contraseña es contrasenita", "senha")])
+def test_declaration_with_a_simple_value_is_moderate_not_zero(text, kind):
+    a = run(text)
+    assert 25 <= a.risk["score"] <= 49 and a.severity == "medio" and cats(a)["segredo"] < 0.8
+    assert ("[SENHA]" if kind == "senha" else "[TOKEN]") in a.masked_text
+    assert from_analysis(a)["alert_level"] == "attention"
+
+
+def test_the_strong_value_keeps_the_higher_tier_and_the_simple_one_never_reaches_the_critical_floor():
+    assert run("meu token é 43954jjsed94523mfdw").risk["score"] >= 70
+    assert run("minha senha e cfdsdfcxv").risk["score"] < 50
+
+
+@pytest.mark.parametrize("text", ["minha senha é muito fraca", "my password is strong", "mi contraseña es incorrecta", "meu token é válido", "minha senha é a mesma do banco",
+                                  "my password is required", "minha senha é forte e longa", "meu token é o mesmo de ontem", "minha senha é <sua_senha>",
+                                  "add a unit test that the token is redacted in logs", "exemplo de .env.example: API_KEY= DB_PASSWORD=", "password=${DB_PASSWORD}",
+                                  "token = os.environ['API_TOKEN']", "the password is hashed before saving"])
+def test_common_words_after_the_noun_are_not_a_secret(text):
+    assert "segredo" not in cats(run(text))
+
+
+def test_v2_top_level_severity_follows_the_score_not_the_last_finding():
+    """Regressão: a severidade do resultado v2 vem da faixa do score, qualquer que seja a ordem ou a severidade dos achados."""
+    for text, band in [("minha senha e cfdsdfcxv", "moderate"), (f"meu token é {TOKEN}", "critical"), ("def soma(a, b):\n    return a + b\n\nprint(soma(1, 2))", "low"),
+                       (f"def f():\n    return 1\nprint(f())\nmeu token é {TOKEN}", "critical")]:
+        a = run(text)
+        out = from_analysis(a)
+        assert out["severity"] == band == {"baixo": "low", "medio": "moderate", "alto": "high", "critico": "critical"}[a.severity], text

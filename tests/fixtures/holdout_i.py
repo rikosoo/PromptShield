@@ -90,6 +90,12 @@ many("typos", ["segredo"], [("pt", "minha senhaa é @@pwd:10@@"), ("pt", "meu to
 many("ofuscado", [], [("pt", "meu token é 4395****mfdw"), ("pt", "meu cartão é 4111 **** **** 1111"), ("pt", "meu cpf é 529.982.***-**"),
                       ("pt", "minha conta é ****456-6")], hard=True)
 
+# 21. declaração com valor SIMPLES (os prints do dono: "minha senha e cfdsdfcxv", "meu token è xcfsdafd asf"): a fraqueza do valor não tira o fato de ser uma senha
+many("declaracao_valor_simples", ["segredo"], [("pt", "minha senha e cfdsdfcxv"), ("en", "meu password è djusahfed"), ("pt", "meu token è xcfsdafd asf"), ("pt", "minha senha é 1234"),
+                                                ("en", "my password is qwertyuiop"), ("es", "mi contraseña es contrasenita"), ("pt", "a senha do wifi é roteador9")])
+many("mencao_sem_valor", [], [("pt", "minha senha é muito fraca"), ("en", "my password is strong"), ("es", "mi contraseña es incorrecta"), ("pt", "meu token é válido"),
+                              ("pt", "minha senha é a mesma do banco"), ("en", "my password is required"), ("pt", "minha senha é forte e longa"), ("pt", "meu token é o mesmo de ontem")], hard=True)
+
 
 def main() -> None:
     out = Path(__file__).with_name("holdout_i.jsonl")

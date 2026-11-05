@@ -11,7 +11,7 @@ from .intents import detect_intents
 from .masking import apply_masks
 from .models import KINDS, Analysis, Context, Finding, Span
 from .ner import NerDetector
-from .scoring import ALERT_LEVEL, ENGINE_VERSION, SCORE_VERSION, THRESHOLD, score, severity_for
+from .scoring import ALERT_LEVEL, CODE_SHARED_RULE, ENGINE_VERSION, SCORE_VERSION, THRESHOLD, score, severity_for
 from .taxonomy import Category, load
 
 BLOCKING = {"segredo", "shell_destrutivo", "leitura_env", "exfiltracao_ferramenta", "envenenamento_mcp"}
@@ -96,8 +96,9 @@ def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
 
     is_agent = ctx.kind == "tool_call" or any(c in reported for c in cats if cats[c].grupo == "Ações de agente")
     has_code = code.has_code(ctx.text)
+    code_shared = has_code and ctx.kind in ("prompt", "file_upload")      # o código que o PRÓPRIO agente escreve (tool_call) não é compartilhamento
     sc, reasons = score(reported, cats, ctx.kind == "tool_call", ctx.personal_account, findings=findings, weights=weights,
-                        has_code=has_code, external_url=agent.has_external_url(ctx))
+                        has_code=has_code, external_url=agent.has_external_url(ctx), code_shared=code_shared)
     spans = [Span(f.start, f.end, f.span_type or "", f.masked or "[oculto]")
              for f in findings if f.start is not None and f.end is not None
              and f.confidence >= THRESHOLD and f.span_type not in ("shell", "file")]
@@ -118,13 +119,14 @@ def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
         masked_text=apply_masks(ctx.text, spans),
         attachments=attachments,
         score_version=SCORE_VERSION,
-        findings=_finding_rows(findings, spans),
+        findings=_finding_rows(findings, spans) + ([_CODE_ROW] if code_shared else []),
         severity=severity_for(sc),
         alert_level=ALERT_LEVEL[severity_for(sc)],
         engine_version=ENGINE_VERSION,
     )
 
 
+_CODE_ROW = {"type": "code_shared", "category": "codigo_proprietario", "confidence": 0.6, "rule": CODE_SHARED_RULE, "evidence": None, "severity": "baixo"}
 SECRET_VALUE_SPANS = {"declared_token", "password", "high_entropy", "bearer_token", "private_key_body"}
 
 

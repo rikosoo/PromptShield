@@ -6,6 +6,7 @@ import { PromptDetailDialog } from "@/components/PromptDetail";
 import { useSession } from "@/components/session";
 import { AlertStatusBadge, Chip, Empty, ErrorBox, Loading, Pager, Panel, RiskBar, SeverityTag } from "@/components/ui";
 import { apiPage, api, qs, useLoad } from "@/lib/api";
+import { readDrill } from "@/lib/drill";
 import { clip, splitMasks, when } from "@/lib/format";
 import { ALERT_STATUS_LABEL, APP_LABEL, appLabel, KIND_LABEL, SEVERITY_LABEL } from "@/lib/labels";
 import type { PersonRow, PromptRow } from "@/lib/types";
@@ -54,6 +55,12 @@ export default function HistoryPage() {
   const [withFile, setWithFile] = useState(false);
   const [review, setReview] = useState("");
   const [sensor, setSensor] = useState<{ id: string; host: string } | null>(null);
+  const [minScore, setMinScore] = useState(0);
+  const [hasSensitive, setHasSensitive] = useState(false);
+  const [hasCode, setHasCode] = useState(false);
+  const [agentAction, setAgentAction] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [urlRead, setUrlRead] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [page, setPage] = useState(0);
@@ -64,20 +71,38 @@ export default function HistoryPage() {
     const sp = new URLSearchParams(window.location.search);
     const id = sp.get("sensor");
     if (id && /^[0-9a-f-]{36}$/i.test(id)) setSensor({ id, host: (sp.get("host") ?? "").slice(0, 200) });
+    // vindo do painel (clicou num número, barra, categoria, ferramenta, departamento ou usuário): filtros validados da URL
+    const d = readDrill(window.location.search);
+    if (d.days) setDays(d.days);
+    if (d.app) setApp(d.app);
+    if (d.category) setCategory(d.category);
+    if (d.severity) setSeverity(d.severity);
+    if (d.alertStatus) setAlertStatus(d.alertStatus);
+    if (d.department) setDepartment(d.department);
+    if (d.user) { setPerson(d.user); setPersonApplied(d.user); }
+    if (d.word) { setWord(d.word); setWordApplied(d.word); }
+    if (d.hasSensitive) setHasSensitive(true);
+    if (d.hasCode) setHasCode(true);
+    if (d.agentAction) setAgentAction(true);
+    if (d.minScore) setMinScore(d.minScore);
+    if (d.dateFrom) setDateFrom(d.dateFrom);
+    if (d.dateTo) setDateTo(d.dateTo);
     setUrlRead(true);
   }, []);
   const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(0); };
   const people = useLoad(() => api<PersonRow[]>(`v1/people${qs({ days, limit: 100 })}`), [days]);
   const filters = {
-    days, user_q: personApplied, q: wordApplied, app: app || undefined, kind, category, severity: severity || undefined, alert_status: alertStatus || undefined, department,
-    session_id: sessionId, sensor: sensor?.id, has_attachment: withFile ? true : undefined, review, min_score: onlyRisk ? 1 : 0, personal_account: personalOnly ? true : undefined,
+    days: dateFrom || dateTo ? undefined : days, date_from: dateFrom || undefined, date_to: dateTo || undefined,
+    has_sensitive: hasSensitive || undefined, has_code: hasCode || undefined, agent_action: agentAction || undefined,
+    user_q: personApplied, q: wordApplied, app: app || undefined, kind, category, severity: severity || undefined, alert_status: alertStatus || undefined, department,
+    session_id: sessionId, sensor: sensor?.id, has_attachment: withFile ? true : undefined, review, min_score: minScore || (onlyRisk ? 1 : 0), personal_account: personalOnly ? true : undefined,
   };
   const list = useLoad(() => (urlRead ? apiPage<PromptRow[]>(`v1/events${qs({ ...filters, sort: "recent", limit: PAGE, offset: page * PAGE })}`)
     : Promise.resolve({ items: [] as PromptRow[], total: 0 })),     // espera ler o ?sensor= da URL antes da primeira busca (senão piscaria a lista inteira)
-    [days, personApplied, wordApplied, app, kind, category, severity, alertStatus, department, onlyRisk, personalOnly, withFile, review, sessionId, sensor?.id, urlRead, page]);
+    [days, personApplied, wordApplied, app, kind, category, severity, alertStatus, department, onlyRisk, minScore, hasSensitive, hasCode, agentAction, dateFrom, dateTo, personalOnly, withFile, review, sessionId, sensor?.id, urlRead, page]);
   const departments = Array.from(new Set((people.data ?? []).map((p) => p.department).filter((d): d is string => !!d))).sort();
-  const anyFilter = sessionId || personApplied || wordApplied || app || kind || category || severity || alertStatus || department || onlyRisk || personalOnly || withFile || review || sensor;
-  const clear = () => { setPerson(""); setPersonApplied(""); setWord(""); setWordApplied(""); setApp(""); setKind(""); setCategory(""); setSeverity(""); setAlertStatus(""); setDepartment(""); setOnlyRisk(false); setPersonalOnly(false); setWithFile(false); setReview(""); setSessionId(""); setSensor(null); setPage(0); };
+  const anyFilter = sessionId || personApplied || wordApplied || app || kind || category || severity || alertStatus || department || minScore || hasSensitive || hasCode || agentAction || dateFrom || dateTo || onlyRisk || personalOnly || withFile || review || sensor;
+  const clear = () => { setPerson(""); setPersonApplied(""); setWord(""); setWordApplied(""); setApp(""); setKind(""); setCategory(""); setSeverity(""); setAlertStatus(""); setDepartment(""); setMinScore(0); setHasSensitive(false); setHasCode(false); setAgentAction(false); setDateFrom(""); setDateTo(""); setOnlyRisk(false); setPersonalOnly(false); setWithFile(false); setReview(""); setSessionId(""); setSensor(null); setPage(0); };
   const choosePerson = (id: string) => { setPerson(id); setPersonApplied(id); setSelected(null); setPage(0); };
 
   return (
@@ -86,6 +111,14 @@ export default function HistoryPage() {
         <h1 className="text-xl font-bold">Todos os prompts</h1>
         <p className="text-sm text-muted">Tudo que foi capturado, do mais recente ao mais antigo, com quem escreveu. A busca vale para o texto já mascarado; o original nunca aparece aqui. Consultar e exportar fica registrado na auditoria.</p>
       </div>
+
+      {(minScore > 0 || hasSensitive || hasCode || agentAction || dateFrom || dateTo) && (
+        <p className="rounded border border-line bg-panel px-3 py-2 text-sm" data-testid="drill-filters">
+          Filtro vindo do painel: {[minScore > 0 && `score ≥ ${minScore}`, hasSensitive && "com dado sensível", hasCode && "com código", agentAction && "ação de agente",
+            (dateFrom || dateTo) && `de ${dateFrom || "…"} a ${dateTo || "…"}`].filter(Boolean).join(" · ")}.{" "}
+          <button type="button" className="text-accent underline" onClick={() => { setMinScore(0); setHasSensitive(false); setHasCode(false); setAgentAction(false); setDateFrom(""); setDateTo(""); setPage(0); }}>Tirar este filtro</button>
+        </p>
+      )}
 
       <form className="grid gap-3 rounded-md border border-line bg-panel px-4 py-3 text-sm md:grid-cols-2 xl:grid-cols-4"
         onSubmit={(e) => { e.preventDefault(); setPersonApplied(person.trim()); setWordApplied(word.trim()); setPage(0); }}>
@@ -178,7 +211,8 @@ export default function HistoryPage() {
                         </button>
                         <Attachments row={p} compact />
                         {p.feedback && <span className="mr-1 text-xs text-muted" data-testid="reviewed-badge">revisado: {VERDICT_LABEL[p.feedback.verdict]}</span>}
-                        <div className="mt-1">{p.categories.map((c) => <Chip key={c.id}>{name(c.id)}</Chip>)}</div>
+                        <div className="mt-1">{p.categories.map((c) => <Chip key={c.id}>{name(c.id)}</Chip>)}
+                          {p.flags.has_code && p.kind === "prompt" && <span title="Código compartilhado: risco baixo, mas pode ser código sensível da empresa"><Chip>Código-fonte (pode ser sensível)</Chip></span>}</div>
                       </td>
                       <td className="td"><RiskBar score={p.risk_score} /></td>
                       <td className="td"><SeverityTag severity={p.severity} /></td>

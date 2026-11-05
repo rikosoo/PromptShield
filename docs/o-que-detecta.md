@@ -130,7 +130,7 @@ Como detecta: Código mais pedido de revisão ou depuração.
 
 | Tipo | O que a pessoa digitou | Detectou? | Categorias | Score | Fica assim no console |
 |---|---|---|---|---|---|
-| prompt | `revise este pull request e aponte bugs: ⏎ --- a/app.py ⏎ +++ b/app.py ⏎ @@ -1,3 +1,4 @@ ⏎ +import os` | sim | revisao_codigo | 10 | `(sem máscara)` |
+| prompt | `revise este pull request e aponte bugs: ⏎ --- a/app.py ⏎ +++ b/app.py ⏎ @@ -1,3 +1,4 @@ ⏎ +import os` | sim | revisao_codigo | 15 | `(sem máscara)` |
 
 ## Ataques à IA
 

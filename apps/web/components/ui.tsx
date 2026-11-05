@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
 import { ACTION_LABEL, ALERT_STATUS_CLASS, ALERT_STATUS_LABEL, SEVERITY_CLASS, SEVERITY_LABEL, severityOf } from "@/lib/labels";
 import { splitMasks } from "@/lib/format";
@@ -37,14 +38,18 @@ export function Collapsible({ title, summary, children, testId, defaultOpen = fa
   );
 }
 
-export function Kpi({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
-  return (
-    <div className="rounded-md border border-line bg-panel p-4" data-testid="kpi">
+export function Kpi({ label, value, hint, href }: { label: string; value: number | string; hint?: string; href?: string }) {
+  const body = (
+    <>
       <div className="font-mono text-3xl font-semibold tabular-nums">{value}</div>
       <div className="text-sm text-muted">{label}</div>
       {hint && <div className="mt-1 text-xs text-muted">{hint}</div>}
-    </div>
+    </>
   );
+  if (!href) return <div className="rounded-md border border-line bg-panel p-4" data-testid="kpi">{body}</div>;
+  // clicável: abre os prompts (ou a tela) que formam o número
+  return <Link href={href} data-testid="kpi" aria-label={`${label}: ${value}. Abrir os detalhes`}
+    className="block rounded-md border border-line bg-panel p-4 transition-colors hover:border-accent hover:bg-panel2 focus-visible:outline focus-visible:outline-2">{body}</Link>;
 }
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
@@ -110,14 +115,14 @@ export function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-muted">{children}</p>;
 }
 
-export function BarList({ rows, max, ariaLabel }: { rows: { label: string; value: number; extra?: string }[]; max?: number; ariaLabel: string }) {
+export function BarList({ rows, max, ariaLabel }: { rows: { label: string; value: number; extra?: string; href?: string }[]; max?: number; ariaLabel: string }) {
   const top = max ?? Math.max(1, ...rows.map((r) => r.value));
   if (!rows.length) return <Empty>Sem dados no período.</Empty>;
   return (
     <ul aria-label={ariaLabel} className="space-y-2">
       {rows.map((r) => (
         <li key={r.label} className="grid grid-cols-[minmax(0,9rem)_1fr_3rem] items-center gap-2 text-sm">
-          <span className="truncate" title={r.label}>{r.label}</span>
+          {r.href ? <Link href={r.href} className="truncate text-accent underline decoration-dotted underline-offset-4 hover:decoration-solid" title={`${r.label}: abrir os prompts`}>{r.label}</Link> : <span className="truncate" title={r.label}>{r.label}</span>}
           <span aria-hidden className="h-2 overflow-hidden rounded-full border border-line bg-panel2"><span className="bar-fill block h-full bg-accent" style={{ width: `${(r.value / top) * 100}%` }} /></span>
           <span className="text-right font-mono tabular-nums">{r.value}{r.extra && <span className="sr-only"> {r.extra}</span>}</span>
         </li>

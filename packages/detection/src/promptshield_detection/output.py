@@ -25,7 +25,7 @@ TYPE_NAME = {
     "promptshield_key": "PROMPTSHIELD_API_KEY", "promptshield_enroll_token": "PROMPTSHIELD_ENROLL_TOKEN", "cartao": "PAYMENT_CARD", "cvv": "CARD_CVV",
     "conta_bancaria": "BANK_ACCOUNT", "agencia": "BANK_BRANCH", "pix": "PIX_KEY", "iban": "IBAN", "routing": "BANK_ROUTING", "cpf": "CPF", "cnpj": "CNPJ",
     "rg": "RG", "documento": "PERSONAL_DOCUMENT", "email": "EMAIL", "telefone": "PHONE", "endereco": "ADDRESS", "cep": "POSTAL_CODE",
-    "ip": "IP_ADDRESS", "internal_host": "INTERNAL_HOST",
+    "ip": "IP_ADDRESS", "internal_host": "INTERNAL_HOST", "code_shared": "SOURCE_CODE_SHARED",
 }
 CATEGORY_NAME = {
     "injection_direta": "PROMPT_INJECTION", "injection_indireta": "INDIRECT_PROMPT_INJECTION", "jailbreak": "JAILBREAK_ATTEMPT",
@@ -52,6 +52,9 @@ RECOMMENDATION = {
     "extracao_system_prompt": "Revisar o contexto: tentativa de obter instruções internas da ferramenta de IA.",
     "jailbreak": "Revisar o contexto: tentativa de remover restrições da ferramenta de IA.",
 }
+CODE_IMPACT = "O código pode ser propriedade intelectual da empresa (lógica interna, credenciais embutidas, estrutura de sistemas) e agora está com uma ferramenta de IA."
+CODE_RECOMMENDATION = ("Risco baixo, apenas informativo: verificar se o código é proprietário ou traz lógica interna da empresa e se o uso desta ferramenta de IA "
+                       "é permitido pela política da organização.")
 DEFAULT_RECOMMENDATION = "Revisar o contexto do prompt e decidir, conforme a política da organização, se há necessidade de acompanhamento."
 NO_AUTO = "Nenhuma recomendação é executada automaticamente."
 
@@ -78,12 +81,15 @@ def to_v2(*, risk_score: int, categories: Sequence[Mapping[str, Any]], findings:
         if conf < THRESHOLD:
             continue
         cat = str(f.get("category") or "")
-        rows.append({"type": finding_type(f), "category": cat, "severity": SEVERITY_EN[_finding_severity(cat, conf)], "confidence": round(conf, 2),
-                     "reason": f.get("rule"), "evidence": f.get("evidence"), "impact": IMPACT.get(cat)})
+        is_code = f.get("type") == "code_shared"
+        fsev = f.get("severity") if f.get("severity") in SEVERITY_EN else _finding_severity(cat, conf)     # o achado pode trazer a própria severidade (código = baixo)
+        rows.append({"type": finding_type(f), "category": cat, "severity": SEVERITY_EN[fsev], "confidence": round(conf, 2),
+                     "reason": f.get("rule"), "evidence": f.get("evidence"), "impact": CODE_IMPACT if is_code else IMPACT.get(cat)})
     top = max(categories, key=lambda c: c.get("confidence", 0), default=None)
     ranked = sorted(reasons, key=lambda r: -int(r.get("contribution", 0)))
     lead = next((r.get("category") for r in ranked if r.get("category")), top["id"] if top else None)
-    rec = (RECOMMENDATION.get(lead or "", DEFAULT_RECOMMENDATION) if rows else "Sem achados: nenhuma ação recomendada.")
+    only_code = any(r["type"] == "SOURCE_CODE_SHARED" for r in rows) and all(r["category"] in ("codigo_proprietario", "revisao_codigo") for r in rows) and sev == "baixo"   # só código (ou pedido de revisão dele), risco baixo
+    rec = CODE_RECOMMENDATION if only_code else (RECOMMENDATION.get(lead or "", DEFAULT_RECOMMENDATION) if rows else "Sem achados: nenhuma ação recomendada.")
     return {
         "risk_score": int(risk_score),
         "severity": SEVERITY_EN[sev],
