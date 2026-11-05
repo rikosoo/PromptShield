@@ -44,7 +44,7 @@
 |---|---|
 | Nome | `promptshield-teste` |
 | Imagem (AMI) | **Ubuntu Server 24.04 LTS** (o script usa `apt`; funciona em Debian/Ubuntu) |
-| Tipo | **4 GB de memória ou mais** (por exemplo `t3.medium`). Com 2 GB o build funciona (o `atualizar-vm.sh` constrói um serviço por vez de propósito), mas fica no limite |
+| Tipo | **4 GB de memória ou mais** (por exemplo `t3.medium`). Com 2 GB o build funciona (o `atualizar.sh` constrói um serviço por vez de propósito), mas fica no limite |
 | Par de chaves | `promptshield-teste` |
 | Rede | grupo de segurança existente: `promptshield-teste`; **Auto-assign public IP: Enable** |
 | Armazenamento | **20 GB gp3** ou mais (imagens Docker e banco crescem) |
@@ -112,9 +112,9 @@ Se o túnel cair, o sensor segue em "falha aberta" (não trava a ferramenta e n�
 
 ## 10. Manter
 
-- **Atualizar** (com backup antes): na VM, `bash infra/atualizar-vm.sh`. Ele faz backup do banco em `~/backups`, baixa o código da branch atual, reconstrói e confere. **Nunca use `docker compose down -v`** em dados que quer manter.
+- **Atualizar** (com backup antes): na VM, `bash infra/atualizar.sh`. Ele faz backup do banco em `~/backups`, baixa o código da branch atual, reconstrói e confere. **Nunca use `docker compose down -v`** em dados que quer manter.
 - **Backup**: `infra/backup.sh` (URL do dono do banco). O backup **não inclui a chave mestra** (`ORIGINAL_TEXT_MASTER_KEY`): guarde-a à parte (`docs/operacao.md`).
-- **Backup do `.env`**: ele tem as senhas; o `atualizar-vm.sh` copia para `~/backups`. Esses arquivos ficam só na VM: baixe uma cópia para um lugar seu seguro, porque se a instância for apagada eles somem junto.
+- **Backup do `.env`**: ele tem as senhas; o `atualizar.sh` copia para `~/backups`. Esses arquivos ficam só na VM: baixe uma cópia para um lugar seu seguro, porque se a instância for apagada eles somem junto.
 
 ## 11. Parar e apagar (para não pagar à toa)
 
