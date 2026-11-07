@@ -13,6 +13,12 @@ LANG_SIGNALS: dict[str, re.Pattern[str]] = {
     "java": re.compile(r"\b(?:public (?:static )?(?:class|void)|System\.out\.println|import java\.)"),
     "go": re.compile(r"^\s*(?:package \w+|func \w+\(|import \()", re.M),
     "c": re.compile(r"#include\s*<|\bint main\s*\(|\b(?:void|int|float|double|char|bool)\s+\*?\w+\s*\([^)]*\)\s*\{"),
+    "rust": re.compile(r"^\s*(?:fn \w+\s*[(<]|use std::|impl(?:<[^>]*>)? \w+|let mut \w+|pub (?:fn|struct|enum) \w+)", re.M),
+    "php": re.compile(r"<\?php|\$this->\w+|^\s*(?:namespace \w+(?:\\\w+)*;|use \w+(?:\\\w+)+;)", re.M),
+    "ruby": re.compile(r"^\s*(?:def \w+[^\n]*\n|class \w+ < \w+|require ['\"]|attr_(?:accessor|reader)|module \w+\s*$)", re.M),
+    "csharp": re.compile(r"\b(?:using System\w*(?:\.\w+)*;|Console\.WriteLine|namespace \w+(?:\.\w+)*\s*\{?|public (?:async )?(?:Task|void|string|int) \w+\()"),
+    "kotlin": re.compile(r"^\s*(?:fun \w+\(|data class \w+|val \w+(?:: \w+)? =|override fun \w+)", re.M),
+    "swift": re.compile(r"^\s*(?:func \w+\(|import (?:UIKit|SwiftUI|Foundation)|guard let \w+|struct \w+: \w+)", re.M),
     "shell": re.compile(r"^#!/bin/(?:ba)?sh|^\s*(?:export \w+=|if \[ )", re.M),
 }
 # comandos de PowerShell/shell colados no texto: contam como "tem código" (não como linguagem, para não puxar o cabeçalho proprietário)
@@ -51,7 +57,8 @@ REVIEW_PHRASES = re.compile(
 OPEN_LICENSE = re.compile(r"(?i)SPDX-License-Identifier:\s*(?:MIT|Apache-2\.0|BSD|ISC|GPL|LGPL|MPL)|\b(?:MIT|Apache) License\b")
 PROPRIETARY = re.compile(
     r"(?i)copyright\s*(?:\(c\)|©)?\s*\d{4}[^\n]{0,60}(?:ltda|s\.a\.|inc\.?|corp|gmbh)|proprietary|"
-    r"confidential|confidencial|uso interno|internal use only|todos os direitos reservados")
+    r"confidential|confidencial|uso interno|internal use only|todos os direitos reservados|all rights reserved|"
+    r"do not distribute|not for distribution|n[aã]o distribuir|trade secret|segredo industrial|uso restrito")
 INTERNAL_PATH = re.compile(r"(?:/|\\)(?:internal|src/internal|corp|intranet)(?:/|\\)|\.corp\.|\.internal\b|\.local\b")
 
 

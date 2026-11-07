@@ -5,7 +5,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from .detectors import agent, business, code, declared, files, infra, injection, pii, secrets
+from .detectors import agent, business, code, declared, files, financial, infra, injection, pii, secrets
 from .detectors.injection import InjectionClassifier
 from .intents import detect_intents
 from .masking import apply_masks
@@ -58,6 +58,7 @@ def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
     ctx = context_from_event(event, allowed_hosts, project_names)
     findings: list[Finding] = []
     findings += pii.detect(ctx)
+    findings += financial.detect(ctx)
     findings += secrets.detect(ctx)
     findings += declared.detect(ctx)
     findings += code.detect(ctx)
