@@ -63,7 +63,7 @@ Para senha vale "a senha do wifi é X" (sem "minha"); para token o degrau simple
 
 ### Código compartilhado
 
-Todo **prompt** (de pessoa) com código recebe risco **baixo (15, informativo)** com o achado `SOURCE_CODE_SHARED`: *"Código-fonte compartilhado: pode ser código sensível da empresa"*, impacto (propriedade intelectual, credenciais embutidas) e recomendação própria. Não vale para o código que o próprio agente escreve (`tool_call`). Se houver risco maior (credencial no código, cabeçalho proprietário), vale o maior, e o aviso de código continua aparecendo. O painel mostra o chip "Código-fonte (pode ser sensível)". Não cria categoria nova: a taxonomia segue com 30 categorias.
+Todo **prompt** (de pessoa) com código recebe risco **graduado pelo volume de código (desde 2026-11-07, versão da pontuação `2026-11-d`): até 19 linhas = 15 (baixo, informativo); 20 a 99 linhas = 28 (moderado); 100 linhas ou mais = 40 (moderado, perto de alto). Linhas = não vazias, só as de dentro de cercas ``` quando há. Vale o maior entre este piso e os demais achados.** Antes era sempre 15. O texto abaixo vale para o aviso, não para o número com o achado `SOURCE_CODE_SHARED`: *"Código-fonte compartilhado: pode ser código sensível da empresa"*, impacto (propriedade intelectual, credenciais embutidas) e recomendação própria. Não vale para o código que o próprio agente escreve (`tool_call`). Se houver risco maior (credencial no código, cabeçalho proprietário), vale o maior, e o aviso de código continua aparecendo. O painel mostra o chip "Código-fonte (pode ser sensível)". Não cria categoria nova: a taxonomia segue com 30 categorias.
 
 ## 3. Detectores
 

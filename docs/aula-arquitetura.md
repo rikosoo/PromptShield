@@ -45,7 +45,7 @@ Redis **não** é usado (só entraria se fosse realmente necessário). Nada espe
 | cryptography / PyJWT | 50.0 / 2.15 |
 | Next.js / React | ^16.4 / ^19.3 |
 | Tailwind / TypeScript / Vitest | ^4.3 / ^7.0 / ^5.0 |
-| Motor de detecção / versão da pontuação | 2.0 / `2026-11-c` |
+| Motor de detecção / versão da pontuação | 2.0 / `2026-11-d` |
 | Migração mais recente do banco | 0021 (palavras-chave) |
 
 **Aviso:** as versões Python vêm do que foi instalado agora, e o `pyproject.toml` só fixa mínimos (`>=`). Nada trava a versão exata; para produção, falta um arquivo de travamento (lock). Isso é uma pendência real.
@@ -62,7 +62,7 @@ Redis **não** é usado (só entraria se fosse realmente necessário). Nada espe
    - +10 se é ação de agente, +10 se conta pessoal;
    - **correlação**: combinações (ex.: credencial + destino externo) somam bônus, com teto de 25;
    - **piso de credencial**: segredo com confiança ≥ 0,9 garante no mínimo 75; ≥ 0,8, 70;
-   - código compartilhado garante 15 (informativo);
+   - código compartilhado garante um piso pelo volume: até 19 linhas 15, 20 a 99 linhas 28, 100 ou mais 40;
    - limite 100. Faixas: **0-24 baixo, 25-49 médio, 50-69 alto, 70-100 crítico**.
    - O cliente pode ajustar o peso de cada categoria (pesos por empresa).
 5. **Mascaramento**: trechos sensíveis viram `AKIA****` antes de gravar. Mascarar também repete a todas as ocorrências do mesmo valor.

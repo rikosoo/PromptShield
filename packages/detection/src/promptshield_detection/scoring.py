@@ -11,7 +11,7 @@ from .models import Finding, Reason
 from .taxonomy import Category
 
 ENGINE_VERSION = "2.0"
-SCORE_VERSION = "2026-11-c"   # 2026-11-c: motor 2.0 (declarações em linguagem natural, correlação, piso de credencial, novas faixas)
+SCORE_VERSION = "2026-11-d"   # 2026-11-d: código compartilhado graduado pelo volume (15/28/40); 2026-11-c: motor 2.0 (declarações, correlação, piso de credencial, faixas)
 # 2026-11-b: credenciais do próprio PromptShield (ps_, pse_) e comando que baixa e executa script (irm | iex, curl | sh)
 # 2026-11-a: infraestrutura no texto (IP, host interno, caminho com usuário, arquivo de negócio)
 THRESHOLD = 0.5  # confiança mínima para a categoria contar
@@ -29,6 +29,11 @@ CREDENTIAL_FLOORS = ((0.9, 75, "Credencial de alta confiança (piso crítico)"),
 MAX_CORRELATION = 25
 # código compartilhado: risco BAIXO (faixa informativa), mas sempre sinalizado como possível código sensível da empresa
 CODE_SHARED_SCORE = 15
+CODE_VOLUME_TIERS = ((100, 40), (20, 28), (0, CODE_SHARED_SCORE))    # (linhas de código, piso do risco): quanto mais código sai da empresa, maior a perda possível
+
+
+def code_floor(lines: int) -> int:
+    return next(floor for min_lines, floor in CODE_VOLUME_TIERS if lines >= min_lines)
 CODE_SHARED_RULE = "Código-fonte compartilhado: pode ser código sensível da empresa"
 SECRET_SPANS = {"private_key", "private_key_body"}
 SENSITIVE_SPAN_CATEGORIES = {"segredo", "pii", "financeiro"}
@@ -74,7 +79,7 @@ def correlate(best: Mapping[str, Finding], findings: Iterable[Finding], has_code
 
 def score(best: dict[str, Finding], cats: dict[str, Category], is_agent_action: bool,
           personal_account: bool, *, findings: Iterable[Finding] = (), weights: Mapping[str, int] | None = None,
-          has_code: bool = False, external_url: bool = False, code_shared: bool = False) -> tuple[int, list[Reason]]:
+          has_code: bool = False, external_url: bool = False, code_shared: int = 0, code_lines: int = 0) -> tuple[int, list[Reason]]:
     contribs: list[tuple[float, str, str]] = []
     for cid, f in best.items():
         if f.confidence < THRESHOLD:
@@ -105,7 +110,7 @@ def score(best: dict[str, Finding], cats: dict[str, Category], is_agent_action: 
                     reasons.append(Reason(rule, round(floor - total), "segredo"))
                     total = float(floor)
                 break
-    if code_shared and total < CODE_SHARED_SCORE:
-        reasons.append(Reason(CODE_SHARED_RULE, round(CODE_SHARED_SCORE - total), "codigo_proprietario"))
-        total = float(CODE_SHARED_SCORE)
+    if code_shared and total < code_shared:      # `code_shared` é o piso (15/28/40), 0 quando não há compartilhamento de código
+        reasons.append(Reason(f"{CODE_SHARED_RULE} ({code_lines} linhas)", round(code_shared - total), "codigo_proprietario"))
+        total = float(code_shared)
     return min(100, round(total)), reasons

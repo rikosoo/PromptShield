@@ -53,6 +53,7 @@ MIME_EXT = {"text/csv": "csv", "text/tab-separated-values": "tsv", "application/
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx", "application/x-ofx": "ofx",
             "text/x-python": "py", "text/javascript": "js", "application/javascript": "js", "text/x-java-source": "java",
             "application/x-sh": "sh", "application/x-sqlite3": "sqlite", "message/rfc822": "eml"}
+CODE_BIG_BYTES = 100 * 1024    # arquivo de código de 100 KB ou mais: muito código de uma vez
 BULK_BYTES = 5 * 1024 * 1024    # planilha, dump ou banco a partir de 5 MB: o volume sugere uma base de registros, não um exemplo
 
 
@@ -70,7 +71,9 @@ def _by_type(ext: str, size: int | None) -> list[Finding]:
     """Sinais pela EXTENSÃO/TIPO e pelo TAMANHO. Fracos de propósito: o conteúdo do arquivo nunca é lido."""
     out: list[Finding] = []
     if ext in CODE_EXT:
-        out.append(Finding("codigo_proprietario", 0.6, "arquivo anexado: arquivo de código-fonte"))
+        big = size is not None and size >= CODE_BIG_BYTES
+        out.append(Finding("codigo_proprietario", 0.8 if big else 0.6,
+                           "arquivo anexado: arquivo de código-fonte" + (f" grande ({size // 1024} KB)" if big else "")))
     if ext in IAC_EXT or ext == "dockerfile":
         out.append(Finding("iac", 0.7, "arquivo anexado: infraestrutura como código"))
     if ext in BANK_EXT:

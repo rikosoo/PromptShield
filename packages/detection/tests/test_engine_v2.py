@@ -287,3 +287,22 @@ def test_v2_top_level_severity_follows_the_score_not_the_last_finding():
         a = run(text)
         out = from_analysis(a)
         assert out["severity"] == band == {"baixo": "low", "medio": "moderate", "alto": "high", "critico": "critical"}[a.severity], text
+
+
+def test_code_risk_grows_with_volume():
+    mk = lambda n: "import os\ndef f():\n" + "".join(f"    x{i} = {i}\n" for i in range(n - 3)) + "    return 1\n"      # noqa: E731
+    small, mid, big = run(mk(5)), run(mk(30)), run(mk(150))
+    assert (small.risk["score"], small.severity) == (15, "baixo")
+    assert (mid.risk["score"], mid.severity) == (28, "medio")
+    assert (big.risk["score"], big.severity) == (40, "medio")
+    assert any("(150 linhas)" in r["rule"] for r in big.risk["reasons"])
+    assert from_analysis(big)["severity"] == "moderate"
+    fenced = run("veja:\n```python\n" + "".join(f"x{i} = {i}\n" for i in range(25)) + "```\n" + "texto\n" * 200)
+    assert fenced.risk["score"] == 28          # só as linhas dentro da cerca contam, não o texto em volta
+
+
+def test_big_code_file_attachment_reaches_medium():
+    from promptshield_detection.detectors.files import detect_name
+    small = {f.confidence for f in detect_name("a.py", 2000)[0]}
+    big = {f.confidence for f in detect_name("a.py", 300 * 1024)[0]}
+    assert max(small) == 0.6 and max(big) == 0.8

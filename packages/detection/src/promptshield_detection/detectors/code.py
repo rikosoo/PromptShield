@@ -79,6 +79,14 @@ def code_presence(text: str) -> tuple[bool, str | None]:
     return (fenced or best_n >= 2 or (best_n >= 1 and structural) or shellish), best
 
 
+def code_lines(text: str) -> int:
+    """Linhas de código (não vazias): as de dentro das cercas ``` quando há, senão todas as linhas do texto. Aproximação, não um analisador."""
+    if len(FENCE.findall(text)) >= 2:
+        parts = text.split("```")[1::2]
+        return sum(1 for part in parts for ln in part.splitlines()[1:] if ln.strip())    # a 1ª linha de cada cerca é o nome da linguagem
+    return sum(1 for ln in text.splitlines() if ln.strip())
+
+
 def has_code(text: str) -> bool:
     return code_presence(text)[0]
 
