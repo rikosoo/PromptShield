@@ -145,4 +145,5 @@ export interface PolicyExceptionRow {
   id: string; policy_id: string; policy_name: string | null; user_id: string | null; group: string | null; reason: string;
   expires_at: string; created_by: string; created_at: string; revoked_at: string | null; state: ExceptionState;
 }
+export interface KeywordRow { id: string; term: string; whole_word: boolean; score: number | null; enabled: boolean; note: string | null; created_by: string; created_at: string }
 export interface AllowlistRow { id: string; kind: "host"; value: string; note: string | null; created_by: string; created_at: string }

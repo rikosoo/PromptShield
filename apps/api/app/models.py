@@ -404,3 +404,17 @@ class AllowlistEntry(Base):
     note: Mapped[str | None] = mapped_column(String(300))
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = _ts()
+
+
+class KeywordRule(Base):
+    """Palavra-chave monitorada: todo prompt que a contém gera um alerta. `score` vazio = pontuação calculada pelo motor."""
+    __tablename__ = "keyword_rules"
+    id: Mapped[uuid.UUID] = _pk()
+    tenant_id: Mapped[uuid.UUID] = _tenant()
+    term: Mapped[str] = mapped_column(String(100))
+    whole_word: Mapped[bool] = mapped_column(Boolean, default=False)
+    score: Mapped[int | None] = mapped_column(Integer)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _ts()

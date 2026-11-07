@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 
 from app import alerts, crypto, governance, metrics
 from app.config import settings
-from app.models import Analysis, Event, Incident, Policy, Tenant
+from app.keywords import matcher
+from app.models import Analysis, Event, Incident, KeywordRule, Policy, Tenant
 from app.policy_engine import DEFAULT_POLICIES, PolicySpec, Subject, evaluate
 from app.schemas import EventIn, EventResult, SpanOut
 from app.security import Principal
@@ -118,6 +119,17 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
     assert tenant is not None
     an = analyze(_engine_event(ev), ner=_ner, allowed_hosts=governance.allowed_hosts(session), weights=tenant.risk_weights or None)
 
+    kw_hits = matcher.find(text, [matcher.Rule(str(k.id), k.term, k.whole_word, k.score) for k in
+                                  session.execute(select(KeywordRule).where(KeywordRule.enabled.is_(True))).scalars()])
+    if kw_hits:
+        calculated = an.risk["score"]
+        final = matcher.effective_score(calculated, kw_hits)
+        if final != calculated:       # pontuação escolhida pelo administrador substitui a calculada; o motivo fica registrado
+            an.risk["score"] = final
+            chosen = max((r for r in kw_hits if r.score is not None), key=lambda r: r.score or 0)
+            an.risk["reasons"] = [*an.risk["reasons"], {"rule": f"Palavra-chave «{chosen.term}»: pontuação definida pelo administrador (calculada: {calculated})",
+                                                        "contribution": final - calculated}]
+
     exceptions = governance.active_exceptions(session)
     specs = [PolicySpec(id=str(x.id), name=x.name, action=x.action, mode=x.mode, enabled=x.enabled,
                         scope=x.scope or {}, match=x.match or {}, exceptions=exceptions.get(str(x.id), ()))
@@ -165,5 +177,6 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
     event = session.get(Event, pk)
     assert event is not None
     metrics.inc("ps_events_ingested_total", channel=ev.source.channel, decision=analysis.decision)
-    alerts.evaluate(session, tenant, event, analysis, incident_id, severity(an.risk["score"]) if incident_id else None)
+    alerts.evaluate(session, tenant, event, analysis, incident_id, severity(an.risk["score"]) if incident_id else None,
+                    keyword_hits=[(r.id, r.term, r.score) for r in kw_hits])
     return _result(event, analysis, incident_id, False)

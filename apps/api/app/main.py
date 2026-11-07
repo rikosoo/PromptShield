@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app import logging_config, metrics, services
 from app.config import settings
+from app.keywords.router import router as keywords_router
 from app.routers import (
     admin,
     alerts,
@@ -99,6 +100,7 @@ app.include_router(feedback.router)
 app.include_router(incidents.router)
 app.include_router(policies.router)
 app.include_router(governance.router)
+app.include_router(keywords_router)
 app.include_router(admin.router)
 app.include_router(analytics.router)
 app.include_router(alerts.router)

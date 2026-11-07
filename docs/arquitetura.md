@@ -66,7 +66,7 @@ Serviço separado do fornecedor (`apps/licensing`, banco próprio, tabelas `lic_
 ## Grupos, exceções e domínios permitidos
 
 ```
-administrador --> /v1/groups | /v1/policies/{id}/exceptions | /v1/allowlist --> tabelas com RLS (migração 0019) + auditoria
+administrador --> /v1/groups | /v1/policies/{id}/exceptions | /v1/allowlist | /v1/keywords --> tabelas com RLS (migrações 0019 e 0021) + auditoria
 ingestão: grupos do usuário + exceções vigentes + domínios --> analyze(allowed_hosts) e policy_engine.evaluate --> decisão
 ```
 

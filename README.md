@@ -36,7 +36,7 @@ sensor na máquina → evento universal → motor de detecção → política �
 
 ## O que o console mostra
 
-O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuários e grupos**, **Políticas** e **Administração**. Em **Usuários e grupos**: *Risco por usuário* e *Grupos*. Em **Políticas**: *Exceções* e *Domínios permitidos*.
+O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuários e grupos**, **Políticas** e **Administração**. Em **Usuários e grupos**: *Risco por usuário* e *Grupos*. Em **Políticas**: *Exceções*, *Domínios permitidos* e *Palavras-chave*.
 
 | Tela | Para quê |
 |---|---|
@@ -49,6 +49,7 @@ O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuário
 | **Sensores** | **painel de todas as máquinas com sensor**: nome da máquina, sistema, **quais IAs estão habilitadas em cada uma** e se chegaram eventos (capturando / aguardando / manual), último usuário (e quantas pessoas usaram a máquina), última atividade, **alertas** (nunca enviou, inativo, extensão sem evento, sensor desatualizado), filtros por máquina, IA, situação e alerta, atalho para os prompts do sensor e **exportação em CSV** (admin/auditor, auditada) |
 | **Grupos** | grupos de pessoas gerenciados no servidor (um sensor não consegue se declarar de um grupo); usados no escopo das políticas |
 | **Exceções** | a política deixa de valer para uma pessoa ou grupo, **com motivo e validade obrigatórios** (máx. 365 dias); o evento segue analisado e marcado como «exceção»; criar e revogar é auditado |
+| **Palavras-chave** | palavras que o administrador quer vigiar: todo prompt que contém a palavra gera um alerta; a pontuação é opcional (vazia = a calculada pelo algoritmo; preenchida = substitui a calculada, com o motivo registrado). Nunca bloqueia |
 | **Domínios permitidos** | destinos aprovados (com subdomínios) que não geram alerta de rede externa; **também deixam de ser sinalizados como destino de envio de dados**, por isso só o administrador mexe |
 | Dispositivos | tokens de matrícula, cobertura por ferramenta, licença, revogação |
 | Políticas, Privacidade e segurança, Piloto, Inference hooks | políticas em modo monitorar ou aplicar, retenção, mapa de dados, piloto de 30 dias |

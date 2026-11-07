@@ -9,7 +9,7 @@ import { when } from "@/lib/format";
 import { CHANNEL_LABEL, CHANNEL_STATUS_LABEL, CHANNEL_TARGET_HINT, SEVERITY_LABEL } from "@/lib/labels";
 import type { AlertRow, Channel, ChannelKind, Severity } from "@/lib/types";
 
-const RULES = [["severidade", "Evento de risco alto ou crítico"], ["injection", "Injection com confiança alta"], ["volume", "Volume anormal"], ["agente", "Agente fora do padrão"]];
+const RULES = [["severidade", "Evento de risco alto ou crítico"], ["injection", "Injection com confiança alta"], ["volume", "Volume anormal"], ["agente", "Agente fora do padrão"], ["palavra_chave", "Palavra-chave monitorada"]];
 const ALERT_KINDS: ChannelKind[] = ["webhook", "slack", "teams", "email"];
 
 interface Draft { kind: ChannelKind; name: string; target: string; min_severity: Severity; min_score: number; proto: "udp" | "tcp"; secret: string }
