@@ -152,8 +152,20 @@ test("incidentes: fila, detalhe com linha do tempo, triagem e texto original com
   // triagem: status e responsável, com registro na linha do tempo
   const before = inc.timeline.length;
   await page.getByLabel("Status").selectOption("em analise");
-  await expect(page.getByText("Incidente atualizado.")).toBeVisible();
+  await expect(page.getByTestId("unsaved")).toBeVisible();                       // mudou, mas ainda não salvou
+  expect((await apiGet<{ status: string }>(page, `v1/incidents/${id}`)).data.status).not.toBe("em analise");
+  await page.getByRole("button", { name: "Descartar" }).click();                  // descartar não grava nada
+  await expect(page.getByTestId("unsaved")).toHaveCount(0);
+  expect((await apiGet<{ status: string }>(page, `v1/incidents/${id}`)).data.status).not.toBe("em analise");
+  await page.getByLabel("Status").selectOption("em analise");
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByTestId("saved-msg")).toContainText("Salvo às");
+  await expect(page.getByTestId("saved-msg")).toContainText("Em análise");
+  await expect(page.getByTestId("unsaved")).toHaveCount(0);
   await page.getByLabel("Responsável").selectOption({ label: "Analista" });
+  await expect(page.getByRole("button", { name: "Salvar", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByTestId("saved-msg")).toContainText("responsável");
   await expect(page.getByTestId("timeline").getByRole("listitem")).toHaveCount(before + 2);
   await expect(page.getByTestId("timeline")).toContainText("status: em analise");
   await expectAccessible(page, "detalhe do incidente");
@@ -179,6 +191,7 @@ test("incidentes: leitura e auditor não triam nem pedem o original", async ({ p
     await page.goto("/incidents");
     await page.getByTestId("incident-row").first().getByRole("link").first().click();
     await expect(page.getByLabel("Status")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Salvar", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Ver texto original" })).toHaveCount(0);
     await logout(page);
   }

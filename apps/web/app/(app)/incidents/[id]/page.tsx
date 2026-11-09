@@ -18,21 +18,41 @@ export default function IncidentDetail({ params }: { params: Promise<{ id: strin
   const people = useLoad(() => (canTriage(me.role) ? api<DirectoryUser[]>("v1/users/directory") : Promise.resolve([] as DirectoryUser[])), [me.role]);
   const [msg, setMsg] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{ id: string; status?: string; assignee?: string } | null>(null);   // alterações ainda NÃO salvas (só deste incidente)
+  const [saving, setSaving] = useState(false);
   const [ask, setAsk] = useState(false);
   const [why, setWhy] = useState("");
   const [original, setOriginal] = useState<string | null>(null);
   const [origErr, setOrigErr] = useState<string | null>(null);
 
-  async function patch(body: Record<string, unknown>) {
+  const mine = draft && draft.id === id ? draft : null;
+  const shownStatus = mine?.status ?? inc?.status ?? "";
+  const shownAssignee = mine?.assignee ?? inc?.assignee_id ?? "";
+  const changed = { status: !!inc && mine?.status !== undefined && mine.status !== inc.status, assignee: !!inc && mine?.assignee !== undefined && mine.assignee !== (inc.assignee_id ?? "") };
+  const dirty = changed.status || changed.assignee;
+
+  /** Salva SÓ o que mudou. Nada é gravado até o botão Salvar. */
+  async function save() {
+    if (!inc || !dirty) return;
     setSaveErr(null);
+    setSaving(true);
+    const body: Record<string, unknown> = {};
+    if (changed.status) body.status = mine!.status;
+    if (changed.assignee) body.assignee_id = mine!.assignee || null;
     try {
       await send("PATCH", `v1/incidents/${id}`, body);
-      setMsg("Incidente atualizado.");
+      const parts = [changed.status ? `status «${STATUS_LABEL[mine!.status as keyof typeof STATUS_LABEL]}»` : "", changed.assignee ? `responsável «${people.data?.find((u) => u.id === mine!.assignee)?.display_name ?? people.data?.find((u) => u.id === mine!.assignee)?.email ?? "sem responsável"}»` : ""].filter(Boolean);
+      setMsg(`Salvo às ${new Date().toLocaleTimeString("pt-BR")}: ${parts.join(" e ")}.`);
+      setDraft(null);
       reload();
     } catch (e) {
+      setMsg(null);
       setSaveErr(e instanceof Error ? e.message : "Erro ao salvar");
+    } finally {
+      setSaving(false);
     }
   }
+  const discard = () => { setDraft(null); setSaveErr(null); setMsg(null); };
 
   async function reveal(ev: FormEvent) {
     ev.preventDefault();
@@ -102,13 +122,20 @@ export default function IncidentDetail({ params }: { params: Promise<{ id: strin
           <Panel title="Triagem">
             <div className="space-y-3 text-sm">
               <div><label htmlFor="status" className="mb-1 block text-muted">Status</label>
-                <select id="status" className="field w-full" value={inc.status} disabled={!triage} onChange={(e) => patch({ status: e.target.value })}>
+                <select id="status" className="field w-full" value={shownStatus} disabled={!triage || saving} onChange={(e) => { setMsg(null); setDraft({ ...(mine ?? { id }), id, status: e.target.value }); }}>
                   {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select></div>
               <div><label htmlFor="assignee" className="mb-1 block text-muted">Responsável</label>
-                <select id="assignee" className="field w-full" value={inc.assignee_id ?? ""} disabled={!triage} onChange={(e) => patch({ assignee_id: e.target.value || null })}>
+                <select id="assignee" className="field w-full" value={shownAssignee} disabled={!triage || saving} onChange={(e) => { setMsg(null); setDraft({ ...(mine ?? { id }), id, assignee: e.target.value }); }}>
                   <option value="">Sem responsável</option>{people.data?.map((u) => <option key={u.id} value={u.id}>{u.display_name ?? u.email}</option>)}</select></div>
               {!triage && <p className="text-xs text-muted">Seu papel só permite leitura.</p>}
-              <p role="status" className="text-xs text-low">{msg}</p>
+              {triage && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" className="btn-primary" disabled={!dirty || saving} onClick={() => void save()}>{saving ? "Salvando…" : "Salvar"}</button>
+                  {dirty && <button type="button" className="btn" disabled={saving} onClick={discard}>Descartar</button>}
+                  {dirty && <span className="text-xs text-med" data-testid="unsaved">Alterações não salvas</span>}
+                </div>
+              )}
+              <p role="status" className="text-xs text-low" data-testid="saved-msg">{msg}</p>
               {saveErr && <ErrorBox message={saveErr} />}
             </div>
           </Panel>
