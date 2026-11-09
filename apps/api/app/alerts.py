@@ -62,7 +62,7 @@ def _enqueue(session: Session, tenant_id: uuid.UUID, channels: list[Notification
 
 
 def evaluate(session: Session, tenant: Tenant, ev: Event, an: Analysis, incident_id: uuid.UUID | None,
-             incident_severity: str | None, keyword_hits: list[tuple[str, str, int | None]] = ()) -> list[Alert]:
+             incident_severity: str | None, keyword_hits: list[tuple[str, str, int | None, bool]] = ()) -> list[Alert]:
     """Avalia as regras para um evento recém-gravado. Devolve os alertas CRIADOS (não os repetidos)."""
     day = ev.occurred_at.astimezone(timezone.utc).strftime("%Y%m%d")
     cats = {c["id"]: c["confidence"] for c in an.categories}
@@ -76,9 +76,9 @@ def evaluate(session: Session, tenant: Tenant, ev: Event, an: Analysis, incident
 
     base = {"score": an.risk_score, "categories": [c["id"] for c in an.categories], "event_id": str(ev.event_id)}
 
-    for kid, term, chosen in keyword_hits:     # um alerta por prompt e por palavra (a chave inclui o evento): "todo prompt com esta palavra"
-        add("palavra_chave", severity_for(an.risk_score), f"kw:{kid}:{ev.event_id}", f"{RULE_LABELS['palavra_chave']}: «{term}»",
-            {**base, "keyword": term, "score_chosen": chosen is not None})
+    for kid, term, chosen, approx in keyword_hits:     # um alerta por prompt e por palavra (a chave inclui o evento): "todo prompt com esta palavra"
+        add("palavra_chave", severity_for(an.risk_score), f"kw:{kid}:{ev.event_id}", f"{RULE_LABELS['palavra_chave']}: «{term}»" + (" (palavra parecida)" if approx else ""),
+            {**base, "keyword": term, "score_chosen": chosen is not None, "approximate": approx})
 
     if incident_id is not None and incident_severity in ("alto", "critico"):
         add("severidade", incident_severity, f"sev:{ev.user_id}:{top}:{day}",

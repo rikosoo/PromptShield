@@ -53,12 +53,12 @@ def test_v2_result_for_the_owners_real_false_negative_and_no_secret_is_stored(cl
     eid, res = post(client, world, f"SIMULADO: meu token è {TOKEN}")
     v2 = res["analysis_v2"]
     assert v2["severity"] == "critical" and v2["alert_level"] == "critical" and v2["risk_score"] >= 70
-    assert v2["masked_prompt"] == "SIMULADO: meu token è [TOKEN]" and v2["detected_categories"] == ["POSSIBLE_API_TOKEN"] and v2["engine_version"] == "2.0"
+    assert v2["masked_prompt"] == f"SIMULADO: meu token è [TOKEN ****{TOKEN[-4:]}]" and v2["detected_categories"] == ["POSSIBLE_API_TOKEN"] and v2["engine_version"] == "2.0"
     assert TOKEN not in str(res) and TOKEN not in client.get(f"/v1/events/{eid}", headers=world.user("leitura")).text
     assert world.sql("SELECT count(*) FROM events WHERE masked_text LIKE :p", p=f"%{TOKEN}%").scalar() == 0
     assert world.sql("SELECT count(*) FROM analyses WHERE findings::text LIKE :p OR reasons::text LIKE :p", p=f"%{TOKEN}%").scalar() == 0
     d = client.get(f"/v1/events/{eid}", headers=world.user("leitura")).json()
-    assert d["analysis_v2"]["findings"][0]["evidence"] == "[TOKEN]" and d["analysis_v2"]["recommendation"].endswith("executada automaticamente.")
+    assert d["analysis_v2"]["findings"][0]["evidence"] == f"[TOKEN ****{TOKEN[-4:]}]" and d["analysis_v2"]["recommendation"].endswith("executada automaticamente.")
     assert d["severity"] == "critico" and d["alert_status"] == "novo" and d["findings"][0]["type"] == "declared_token"
 
 

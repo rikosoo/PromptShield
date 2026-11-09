@@ -212,6 +212,7 @@ export default function HistoryPage() {
                         <Attachments row={p} compact />
                         {p.feedback && <span className="mr-1 text-xs text-muted" data-testid="reviewed-badge">revisado: {VERDICT_LABEL[p.feedback.verdict]}</span>}
                         <div className="mt-1">{p.categories.map((c) => <Chip key={c.id}>{name(c.id)}</Chip>)}
+                        {(p.flags.keyword_hits ?? []).map((k) => <Chip key={`kw-${k}`}>Palavra-chave: {k}</Chip>)}
                           {p.flags.has_code && p.kind === "prompt" && <span title="Código compartilhado: risco baixo, mas pode ser código sensível da empresa"><Chip>Código-fonte (pode ser sensível)</Chip></span>}</div>
                       </td>
                       <td className="td"><RiskBar score={p.risk_score} /></td>

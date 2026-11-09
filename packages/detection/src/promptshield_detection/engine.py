@@ -107,6 +107,7 @@ def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
              and f.confidence >= THRESHOLD and f.span_type not in ("shell", "file")]
     seen: set[tuple[int, int]] = set()
     spans = [sp for sp in spans if not ((sp.start, sp.end) in seen or seen.add((sp.start, sp.end)))]
+    spans = [_with_tail(ctx.text, sp) for sp in spans]
     spans += _repeat_spans(ctx.text, spans)
     sensitive = any(cats[c].grupo == "Dados sensíveis" for c in reported)
     ids = set(reported)
@@ -131,6 +132,10 @@ def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
 
 _CODE_ROW = {"type": "code_shared", "category": "codigo_proprietario", "confidence": 0.6, "rule": CODE_SHARED_RULE, "evidence": None, "severity": "baixo"}
 SECRET_VALUE_SPANS = {"declared_token", "password", "high_entropy", "bearer_token", "private_key_body"}
+# tipos que mostram o final do valor; chave privada, string de conexão e webhook NUNCA (sem final)
+TAIL_SPANS = (SECRET_VALUE_SPANS - {"private_key_body"}) | {
+    "aws_access_key", "gcp_api_key", "github_token", "slack_token", "stripe_key", "aws_secret_key", "anthropic_key", "openai_key", "npm_token",
+    "gitlab_token", "sendgrid_key", "hf_token", "pypi_token", "do_token", "mailgun_key"}
 
 
 def _repeat_spans(text: str, spans: list[Span]) -> list[Span]:
@@ -150,14 +155,33 @@ def _repeat_spans(text: str, spans: list[Span]) -> list[Span]:
     return extra
 
 
+def _tail_len(n: int) -> int:
+    """Quantos caracteres do FINAL mostrar. Decisão do dono (2026-11-09): ver o final ajuda a julgar se o valor é real. Valores curtos mostram
+    menos (ou nada), porque 4 caracteres de uma senha de 8 já são metade dela."""
+    return 4 if n >= 12 else 2 if n >= 8 else 0
+
+
+def _with_tail(text: str, sp: Span) -> Span:
+    if sp.type not in TAIL_SPANS:
+        return sp
+    value = text[sp.start:sp.end]
+    k = _tail_len(len(value))
+    if k == 0:
+        return sp
+    tail = value[-k:]
+    masked = f"{sp.masked[:-1]} ****{tail}]" if sp.masked.endswith("]") else f"{sp.masked}{tail}"
+    return Span(sp.start, sp.end, sp.type, masked)
+
+
 def _finding_rows(findings: list[Finding], spans: list[Span]) -> list[dict[str, Any]]:
     """Achados que contam (confiança >= limiar), sem repetir tipo+categoria. A evidência é SEMPRE a máscara, nunca o valor."""
     out: dict[tuple[str, str], dict[str, Any]] = {}
+    shown = {(sp.start, sp.end): sp.masked for sp in spans}
     for f in findings:
         if f.confidence < THRESHOLD:
             continue
         kind = f.span_type or f.category
         key = (kind, f.category)
         if key not in out or f.confidence > out[key]["confidence"]:
-            out[key] = {"type": kind, "category": f.category, "confidence": round(f.confidence, 2), "rule": f.rule, "evidence": f.masked}
+            out[key] = {"type": kind, "category": f.category, "confidence": round(f.confidence, 2), "rule": f.rule, "evidence": shown.get((f.start, f.end), f.masked)}
     return sorted(out.values(), key=lambda r: (-r["confidence"], r["type"]))

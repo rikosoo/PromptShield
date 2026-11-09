@@ -24,6 +24,7 @@ class KeywordIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     term: str = Field(min_length=2, max_length=100)
     whole_word: bool = False
+    fuzzy: bool = Field(default=True, description="aceita palavras parecidas (erro de digitação, plural)")
     score: int | None = Field(default=None, ge=0, le=100, description="vazio: vale a pontuação calculada pelo motor")
     enabled: bool = True
     note: str | None = Field(default=None, max_length=300)
@@ -47,12 +48,12 @@ class KeywordIn(BaseModel):
 
 
 def _view(k: KeywordRule) -> dict:
-    return {"id": str(k.id), "term": k.term, "whole_word": k.whole_word, "score": k.score, "enabled": k.enabled, "note": k.note,
+    return {"id": str(k.id), "term": k.term, "whole_word": k.whole_word, "fuzzy": k.fuzzy, "score": k.score, "enabled": k.enabled, "note": k.note,
             "created_by": k.created_by, "created_at": k.created_at.isoformat()}
 
 
 def _snap(k: KeywordRule) -> dict:
-    return {"term": k.term, "whole_word": k.whole_word, "score": k.score, "enabled": k.enabled}
+    return {"term": k.term, "whole_word": k.whole_word, "fuzzy": k.fuzzy, "score": k.score, "enabled": k.enabled}
 
 
 @router.get("", summary="Palavras-chave monitoradas")

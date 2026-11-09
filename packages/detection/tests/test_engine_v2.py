@@ -82,7 +82,7 @@ def test_06b_cvv_so_com_contexto():
 def test_07_token_sem_prefixo_de_fornecedor_e_detectado_em_pt_en_es_com_erros_de_digitacao(text):
     a = run(text)
     assert cats(a).get("segredo", 0) >= 0.7 and a.risk["score"] >= 70 and a.severity == "critico"
-    assert TOKEN not in a.masked_text and "[TOKEN]" in a.masked_text
+    assert TOKEN not in a.masked_text and f"[TOKEN ****{TOKEN[-4:]}]" in a.masked_text
 
 
 # 8-10 chaves conhecidas, JWT, AWS
@@ -202,9 +202,9 @@ def test_resultado_v2_tem_o_formato_da_especificacao_e_nunca_expoe_o_segredo():
     assert set(out) >= {"risk_score", "severity", "monitoring_mode", "detected_categories", "confidence", "alert_level", "action", "masked_prompt",
                         "findings", "recommendation", "engine_version"}
     assert out["monitoring_mode"] == "passive" and out["action"] == "monitor" and out["severity"] == "critical" and out["alert_level"] == "critical"
-    assert out["detected_categories"] == ["POSSIBLE_API_TOKEN"] and out["masked_prompt"] == "meu token è [TOKEN]" and out["engine_version"] == "2.0"
+    assert out["detected_categories"] == ["POSSIBLE_API_TOKEN"] and out["masked_prompt"] == f"meu token è [TOKEN ****{TOKEN[-4:]}]" and out["engine_version"] == "2.0"
     f = out["findings"][0]
-    assert f["evidence"] == "[TOKEN]" and f["impact"] and f["reason"] and f["category"] == "segredo" and f["severity"] == "critical"
+    assert f["evidence"] == f"[TOKEN ****{TOKEN[-4:]}]" and f["impact"] and f["reason"] and f["category"] == "segredo" and f["severity"] == "critical"
     assert "revogação" in out["recommendation"] and "Nenhuma recomendação é executada automaticamente" in out["recommendation"]
     assert TOKEN not in json.dumps(out, ensure_ascii=False)
 
@@ -263,7 +263,7 @@ def test_code_note_never_lowers_a_higher_risk_and_still_shows_with_it():
 def test_declaration_with_a_simple_value_is_moderate_not_zero(text, kind):
     a = run(text)
     assert 25 <= a.risk["score"] <= 49 and a.severity == "medio" and cats(a)["segredo"] < 0.8
-    assert ("[SENHA]" if kind == "senha" else "[TOKEN]") in a.masked_text
+    assert ("[SENHA" if kind == "senha" else "[TOKEN") in a.masked_text
     assert from_analysis(a)["alert_level"] == "attention"
 
 
@@ -306,3 +306,27 @@ def test_big_code_file_attachment_reaches_medium():
     small = {f.confidence for f in detect_name("a.py", 2000)[0]}
     big = {f.confidence for f in detect_name("a.py", 300 * 1024)[0]}
     assert max(small) == 0.6 and max(big) == 0.8
+
+
+# final do valor (decisão do dono, 2026-11-09): ajuda a julgar se é real; nunca o valor inteiro, e nunca em chave privada
+def test_tail_of_secrets_is_shown_by_length_and_never_the_whole_value():
+    long_t, mid, short = "q8Zx3Lm9Vb2Nc7Rt5Yw1", "Kd82Lp9Qx", "ab12cd"      # 20, 9 e 6 caracteres
+    assert run(f"meu token é {long_t}").masked_text == "meu token é [TOKEN ****5Yw1]"            # 4 finais
+    assert run(f"minha senha é {mid}").masked_text == "minha senha é [SENHA ****Qx]"            # 2 finais
+    assert run(f"minha senha é {short}").masked_text == "minha senha é [SENHA]"                  # curto: nada
+
+
+def test_provider_key_keeps_prefix_and_shows_tail_but_private_key_never():
+    key = "AKIAZ7QW4XK2M9PLR3TN"
+    m = run(f"use a chave {key} no deploy").masked_text
+    assert m == "use a chave AKIA****R3TN no deploy"
+    pk = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAabcdefghijklmnopqrstuvwxyz0123456789ABCD\n-----END RSA PRIVATE KEY-----"
+    out = run(pk).masked_text
+    assert "MIIEow" not in out and "ABCD" not in out and "****" in out
+
+
+def test_tail_also_in_findings_evidence_and_repeated_value():
+    t = "q8Zx3Lm9Vb2Nc7Rt5Yw1"
+    a = run(f"meu token é {t} e repito {t}")
+    assert a.masked_text == "meu token é [TOKEN ****5Yw1] e repito [TOKEN ****5Yw1]"
+    assert all(t not in str(f) for f in a.findings) and any(f["evidence"] == "[TOKEN ****5Yw1]" for f in a.findings)

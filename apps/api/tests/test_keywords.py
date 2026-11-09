@@ -76,3 +76,86 @@ def test_disabled_keyword_does_not_alert_and_roles_and_isolation(client, world):
     assert _alerts(client, world) == []
     assert client.get("/v1/keywords", headers=world.user("admin", tenant="b")).json() == []
     assert client.delete(f"/v1/keywords/{k['id']}", headers=world.user("admin")).status_code == 204
+
+
+@pytest.mark.db
+def test_keyword_prompt_shows_as_new_alert_in_the_list_even_with_low_score(client, world):
+    _add(client, world, term="brocolis")
+    r = _send(client, world, "que vontade de comer Brocolis (simulado)")
+    assert r["risk"]["score"] == 0 and r["incident_id"] is not None          # score baixo, mas vira alerta "Novo"
+    rows = client.get("/v1/events", headers=world.user("admin")).json()
+    row = next(x for x in rows if x["event_id"] == r["event_id"])
+    assert row["alert_status"] == "novo" and row["flags"]["keyword_hits"] == ["brocolis"] and row["severity"] == "baixo"
+    plain = _send(client, world, "texto comum sem a palavra (simulado)")
+    assert plain["incident_id"] is None
+    assert len(_alerts(client, world)) == 1
+
+
+# ---------------------------------------------------------------- palavras próximas (aproximada)
+from app.keywords.matcher import distance, find_hits, tolerance  # noqa: E402
+
+
+def test_distance_and_tolerance():
+    assert distance("brocolis", "brocoli", 2) == 1 and distance("fenix", "fnei", 3) == 2
+    assert distance("fenix", "fneix", 2) == 1                       # letras vizinhas trocadas contam como UMA edição
+    assert distance("abc", "abcdefgh", 2) == 3                      # passou do limite: corta
+    assert [tolerance(n) for n in (3, 4, 5, 8, 9, 15)] == [0, 0, 1, 1, 2, 2]
+
+
+@pytest.mark.parametrize("text", ["comprei brocoli hoje", "BRÓCOLIS!", "brocollis", "brocoils no jantar", "brocolos"])
+def test_fuzzy_catches_typos_plurals_and_swaps(text):
+    hits = find_hits(text, [Rule("1", "brocolis", fuzzy=True)])
+    assert len(hits) == 1
+
+
+def test_fuzzy_marks_approximate_only_when_not_exact():
+    exact = find_hits("tem brocolis", [Rule("1", "brocolis", fuzzy=True)])[0]
+    near = find_hits("tem brocoli", [Rule("1", "brocolis", fuzzy=True)])[0]
+    assert exact.approximate is False and near.approximate is True
+
+
+def test_fuzzy_off_by_default_and_when_the_rule_says_so():
+    assert find("tem brocoli", [Rule("1", "brocolis")]) == []
+    assert find("tem brocoli", [Rule("1", "brocolis", fuzzy=False)]) == []
+
+
+@pytest.mark.parametrize("text", ["comprei couve hoje", "brasil", "os bolsistas", "cpf", "casa"])
+def test_fuzzy_does_not_match_unrelated_words(text):
+    assert find(text, [Rule("1", "brocolis", fuzzy=True)]) == []
+
+
+def test_fuzzy_short_words_stay_exact_and_multiword_terms_work():
+    assert find("o cpg foi enviado", [Rule("1", "cpf", fuzzy=True)]) == []           # 3 letras: sem tolerância
+    assert find("falei do projeto fenyx", [Rule("1", "projeto fenix", fuzzy=True)])  # cada palavra tolera o seu erro
+    assert find("projto fenix", [Rule("1", "projeto fenix", fuzzy=True)])
+    assert not find("fenix projeto", [Rule("1", "projeto fenix", fuzzy=True)])       # a ordem importa
+    assert not find("projeto sol", [Rule("1", "projeto fenix", fuzzy=True)])
+
+
+def test_fuzzy_respects_whole_word_for_the_exact_part_only():
+    assert find("reaproveitar", [Rule("1", "proveit", whole_word=True, fuzzy=True)]) == []
+    assert find("super brocolis", [Rule("1", "brocolis", whole_word=True, fuzzy=True)])
+
+
+def test_fuzzy_is_fast_on_large_text():
+    import time
+    text = ("lorem ipsum dolor sit amet consectetur " * 3000) + " brocoli"
+    t0 = time.perf_counter()
+    assert find(text, [Rule("1", "brocolis", fuzzy=True)])
+    assert time.perf_counter() - t0 < 2.0
+
+
+@pytest.mark.db
+def test_api_default_is_fuzzy_and_alert_says_similar_word(client, world):
+    k = _add(client, world, term="brocolis")
+    assert k["fuzzy"] is True
+    r = _send(client, world, "comprei brocoli (simulado)")
+    assert r["incident_id"] is not None
+    a = _alerts(client, world)
+    assert "palavra parecida" in a[0]["title"]          # a API de alertas não expõe `detail`; o título já avisa
+    assert world.sql("SELECT detail->>'approximate' FROM alerts WHERE rule = 'palavra_chave'").scalar() == "true"
+    exact = _send(client, world, "comprei brocolis (simulado)")
+    assert exact["incident_id"] is not None
+    off = client.put(f"/v1/keywords/{k['id']}", json={"term": "brocolis", "fuzzy": False}, headers=world.user("admin"))
+    assert off.status_code == 200 and off.json()["fuzzy"] is False
+    assert _send(client, world, "comprei brocoli (simulado)")["incident_id"] is None

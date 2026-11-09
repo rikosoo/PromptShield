@@ -413,6 +413,7 @@ class KeywordRule(Base):
     tenant_id: Mapped[uuid.UUID] = _tenant()
     term: Mapped[str] = mapped_column(String(100))
     whole_word: Mapped[bool] = mapped_column(Boolean, default=False)
+    fuzzy: Mapped[bool] = mapped_column(Boolean, default=True)
     score: Mapped[int | None] = mapped_column(Integer)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     note: Mapped[str | None] = mapped_column(String(300))

@@ -47,7 +47,7 @@ export interface AnalysisV2 {
 export interface PromptRow {
   event_id: string; occurred_at: string; app: string; channel: string; user_id: string; department: string | null; kind: string;
   personal_account: boolean; masked_text: string; attachments?: { name: string; size: number | null; mime: string | null }[]; has_original: boolean; categories: Category[];
-  flags: { has_code: boolean; has_sensitive: boolean; is_agent_action: boolean; intents?: string[]; has_attachments?: boolean };
+  flags: { has_code: boolean; has_sensitive: boolean; is_agent_action: boolean; intents?: string[]; has_attachments?: boolean; keyword_hits?: string[] };
   tool_name?: string | null; session_id?: string | null; spans?: { type: string; masked: string }[];
   risk_score: number; reasons: { rule: string; contribution: number; category?: string }[];
   decision: Action; would_decide: Action; policy_hits: { policy_id: string; name: string; action: string; mode: string; excepted?: string }[];
@@ -145,5 +145,5 @@ export interface PolicyExceptionRow {
   id: string; policy_id: string; policy_name: string | null; user_id: string | null; group: string | null; reason: string;
   expires_at: string; created_by: string; created_at: string; revoked_at: string | null; state: ExceptionState;
 }
-export interface KeywordRow { id: string; term: string; whole_word: boolean; score: number | null; enabled: boolean; note: string | null; created_by: string; created_at: string }
+export interface KeywordRow { id: string; term: string; whole_word: boolean; fuzzy: boolean; score: number | null; enabled: boolean; note: string | null; created_by: string; created_at: string }
 export interface AllowlistRow { id: string; kind: "host"; value: string; note: string | null; created_by: string; created_at: string }

@@ -119,9 +119,11 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
     assert tenant is not None
     an = analyze(_engine_event(ev), ner=_ner, allowed_hosts=governance.allowed_hosts(session), weights=tenant.risk_weights or None)
 
-    kw_hits = matcher.find(text, [matcher.Rule(str(k.id), k.term, k.whole_word, k.score) for k in
-                                  session.execute(select(KeywordRule).where(KeywordRule.enabled.is_(True))).scalars()])
+    kw_found = matcher.find_hits(text, [matcher.Rule(str(k.id), k.term, k.whole_word, k.score, k.fuzzy) for k in
+                                        session.execute(select(KeywordRule).where(KeywordRule.enabled.is_(True))).scalars()])
+    kw_hits = [h.rule for h in kw_found]
     if kw_hits:
+        an.flags["keyword_hits"] = [r.term for r in kw_hits]        # o console mostra a palavra como etiqueta do prompt
         calculated = an.risk["score"]
         final = matcher.effective_score(calculated, kw_hits)
         if final != calculated:       # pontuação escolhida pelo administrador substitui a calculada; o motivo fica registrado
@@ -168,8 +170,9 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
         decision=pe.decision, would_decide=pe.would_decide, policy_hits=pe.hits, score_version=an.score_version)
     session.add(analysis)
     incident_id = None
-    if an.risk["score"] >= INCIDENT_MIN_SCORE:
-        inc = Incident(tenant_id=p.tenant_id, event_pk=pk, severity=severity(an.risk["score"]))
+    if an.risk["score"] >= INCIDENT_MIN_SCORE or kw_hits:     # palavra-chave sempre aparece como alerta "Novo" na lista, mesmo com score baixo
+        inc = Incident(tenant_id=p.tenant_id, event_pk=pk,
+                       severity=severity(an.risk["score"]) if an.risk["score"] >= INCIDENT_MIN_SCORE else severity_label(an.risk["score"]))
         session.add(inc)
         session.flush()
         incident_id = inc.id
@@ -177,6 +180,6 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
     event = session.get(Event, pk)
     assert event is not None
     metrics.inc("ps_events_ingested_total", channel=ev.source.channel, decision=analysis.decision)
-    alerts.evaluate(session, tenant, event, analysis, incident_id, severity(an.risk["score"]) if incident_id else None,
-                    keyword_hits=[(r.id, r.term, r.score) for r in kw_hits])
+    alerts.evaluate(session, tenant, event, analysis, incident_id, severity(an.risk["score"]) if incident_id and an.risk["score"] >= INCIDENT_MIN_SCORE else None,
+                    keyword_hits=[(h.rule.id, h.rule.term, h.rule.score, h.approximate) for h in kw_found])
     return _result(event, analysis, incident_id, False)
