@@ -149,6 +149,7 @@ class UserIn(BaseModel):
     department: str | None = Field(default=None, max_length=120)
     groups: list[str] = Field(default_factory=list)
     active: bool = True
+    password: str | None = Field(default=None, max_length=256, description="senha inicial (a pessoa troca no primeiro acesso); vazia: o servidor gera uma temporária quando o login com senha está ligado")
     _n = field_validator("display_name", "department")(_clean_line)
 
 

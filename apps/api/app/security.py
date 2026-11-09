@@ -28,6 +28,7 @@ class Principal:
     scopes: tuple[str, ...] = ()    # só para chaves
     department: str | None = None
     email: str | None = None
+    must_change_password: bool = False      # sessão com senha provisória: só pode ver quem é e trocar a senha
 
 
 def hash_key(key: str) -> str:
@@ -76,7 +77,42 @@ def set_key_provider(p: KeyProvider | None) -> None:
     _provider = p
 
 
+LOCAL_ISSUER = "promptshield-local"
+LOCAL_AUDIENCE = "promptshield-console"
+MUST_CHANGE_ALLOWED = ("/v1/me", "/v1/me/password")     # com senha provisória, só estas rotas respondem
+
+
+def issue_local_token(user_id: str, email: str, password_version: int, ttl_seconds: int | None = None) -> tuple[str, int]:
+    """Sessão do login com senha: HS256 com `LOCAL_AUTH_SECRET`; `pv` amarra a sessão à versão da senha (trocar a senha derruba as sessões abertas)."""
+    import time
+
+    ttl = ttl_seconds if ttl_seconds is not None else settings.local_auth_ttl_hours * 3600
+    now = int(time.time())
+    token = jwt.encode({"iss": LOCAL_ISSUER, "aud": LOCAL_AUDIENCE, "sub": user_id, "email": email, "email_verified": True, "pv": password_version,
+                        "iat": now, "exp": now + ttl}, settings.local_auth_secret or "", algorithm="HS256")
+    return token, ttl
+
+
+def _local_claims(token: str) -> dict[str, Any] | None:
+    """Claims de uma sessão do login com senha; None se o token não é deste tipo (segue para os outros modos)."""
+    if not (settings.local_auth and settings.local_auth_secret):
+        return None
+    try:
+        if jwt.decode(token, options={"verify_signature": False}).get("iss") != LOCAL_ISSUER:
+            return None
+    except jwt.PyJWTError:
+        return None
+    try:
+        return jwt.decode(token, settings.local_auth_secret, algorithms=["HS256"], issuer=LOCAL_ISSUER, audience=LOCAL_AUDIENCE,
+                          options={"require": ["exp", "iss", "aud", "sub", "pv"]})
+    except jwt.PyJWTError as exc:
+        raise _unauthorized("token inválido ou expirado") from exc
+
+
 def verify_token(token: str) -> dict[str, Any]:
+    local = _local_claims(token)
+    if local is not None:
+        return local
     mode = settings.oidc_mode
     try:
         if mode == "mock":
@@ -122,11 +158,15 @@ def _resolve_user(token: str) -> Principal:
     if not email or claims.get("email_verified") is not True:
         raise _unauthorized("o token precisa trazer e-mail verificado")
     with anonymous_session() as s:
-        row = s.execute(text("SELECT user_id, tenant_id, role, department FROM auth_user_by_email(:e)"), {"e": email}).first()
+        row = s.execute(text("SELECT user_id, tenant_id, role, department, password_version, must_change_password FROM auth_user_by_email(:e)"),
+                        {"e": email}).first()
     if row is None:
         raise _unauthorized("usuário não cadastrado ou inativo")
+    local = claims.get("iss") == LOCAL_ISSUER
+    if local and (claims.get("pv") != row.password_version or claims.get("sub") != str(row.user_id)):
+        raise _unauthorized("sessão encerrada: a senha foi alterada; entre de novo")
     return Principal(kind="user", id=str(row.user_id), tenant_id=row.tenant_id, role=row.role,
-                     department=row.department, email=email)
+                     department=row.department, email=email, must_change_password=bool(local and row.must_change_password))
 
 
 SUSPENDED_DETAIL = "contrato suspenso: a coleta e as alterações estão paradas; os dados continuam guardados. Fale com o fornecedor."
@@ -150,6 +190,8 @@ def current_principal(
         raise _unauthorized("envie X-API-Key ou Authorization: Bearer")
     p = _resolve_key(raw) if raw.startswith(KEY_PREFIX) else _resolve_user(raw)
     request.state.tenant_id = str(p.tenant_id)  # para o log de acesso
+    if p.must_change_password and request.url.path not in MUST_CHANGE_ALLOWED:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "troque a senha provisória antes de continuar", headers={"X-PromptShield-Password-Change": "required"})
     if tenant_suspension(p.tenant_id) is not None:
         # coletores: tudo recusado (o sensor segue em fail_mode open: os funcionários continuam trabalhando, só o monitoramento para).
         # console: o administrador ainda entra e LÊ (e exporta) os dados, mas nada é alterado.

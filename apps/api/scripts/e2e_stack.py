@@ -29,6 +29,7 @@ def main() -> None:
     os.environ.update({
         "ADMIN_DATABASE_URL": admin_url, "DATABASE_URL": app_url, "APP_DB_PASSWORD": APP_PW,
         "OIDC_MODE": "mock", "OIDC_MOCK_SECRET": "e2e-mock-secret-with-more-than-32-chars",
+        "LOCAL_AUTH": "true", "LOCAL_AUTH_SECRET": "e2e-local-auth-secret-with-more-than-32-chars",     # o login com senha convive com o simulado
         # só no banco de teste: o webhook de teste do console aponta para um servidor local
         "ALLOW_INSECURE_WEBHOOKS": "true", "ALLOW_PRIVATE_WEBHOOK_TARGETS": "true",
         "ORIGINAL_TEXT_MASTER_KEY": base64.urlsafe_b64encode(b"e2e-master-key-32-bytes-long!!!!"[:32]).decode(),

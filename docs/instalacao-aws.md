@@ -116,6 +116,33 @@ Se o túnel cair, o sensor segue em "falha aberta" (não trava a ferramenta e n�
 - **Backup**: `infra/backup.sh` (URL do dono do banco). O backup **não inclui a chave mestra** (`ORIGINAL_TEXT_MASTER_KEY`): guarde-a à parte (`docs/operacao.md`).
 - **Backup do `.env`**: ele tem as senhas; o `atualizar.sh` copia para `~/backups`. Esses arquivos ficam só na VM: baixe uma cópia para um lugar seu seguro, porque se a instância for apagada eles somem junto.
 
+## 10b. Ligar o login com e-mail e senha (recomendado)
+
+Até aqui o console entra só com o e-mail (modo de teste). Estes passos trocam isso por **e-mail e senha**, com troca obrigatória da senha provisória, bloqueio após 5 tentativas erradas (15 minutos) e sessões que caem quando a senha muda. Política de senha: 8 ou mais caracteres, com minúscula, maiúscula, número e caractere especial.
+
+**A ordem importa: dê senha ao administrador ANTES de desligar o login só com e-mail, senão você fica trancado fora.**
+
+1. Atualize para a versão com senha (cria colunas novas no banco; faz backup antes): `bash infra/atualizar.sh <branch>`.
+2. Gere uma senha temporária para o seu administrador (o login antigo continua funcionando até o passo 4):
+   ```bash
+   sudo docker compose exec api python -m app.cli set-password --email SEU_EMAIL_DE_ADMIN --generate
+   ```
+   A senha temporária aparece **uma única vez**: anote.
+3. Ligue o login com senha no `.env` e recrie os serviços:
+   ```bash
+   sed -i '/^LOCAL_AUTH=/d;/^LOCAL_AUTH_SECRET=/d' .env
+   printf 'LOCAL_AUTH=true\nLOCAL_AUTH_SECRET=%s\n' "$(openssl rand -hex 32)" >> .env
+   sed -i 's/^AUTH_MODE=.*/AUTH_MODE=local/; s/^OIDC_MODE=.*/OIDC_MODE=off/' .env
+   sudo docker compose up -d --force-recreate api web
+   ```
+   `OIDC_MODE=off` é essencial: com `mock` ligado, a rota `/dev/token` emite sessão para qualquer e-mail e **contorna a senha**.
+4. Entre no console com o e-mail e a senha temporária; o sistema pede para você definir a sua.
+5. Em **Administração → Colaboradores** (só o administrador vê) cadastre as outras pessoas: o sistema gera uma senha temporária por pessoa e a mostra uma vez. Quem esquecer a senha pede ao administrador o botão **Nova senha**.
+
+**Para voltar ao login só com e-mail (teste):** `sed -i 's/^AUTH_MODE=.*/AUTH_MODE=mock/; s/^OIDC_MODE=.*/OIDC_MODE=mock/' .env` e `sudo docker compose up -d --force-recreate api web` (o `OIDC_MOCK_SECRET` do `.env` já existe).
+
+Os sensores e a extensão **não mudam**: eles usam chaves de API, não a senha do console. Limites: não há envio de e-mail (a recuperação é pelo administrador), nem segundo fator, nem lista de senhas comuns (só a regra acima); o login corporativo (OIDC/SSO) segue sem teste contra provedor real.
+
 ## 11. Parar e apagar (para não pagar à toa)
 
 - **Pausar**: EC2 → Instances → **Instance state → Stop**. Não cobra computação, mas o disco continua cobrando; o IP público muda ao religar (sem Elastic IP).

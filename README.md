@@ -36,7 +36,7 @@ sensor na máquina → evento universal → motor de detecção → política �
 
 ## O que o console mostra
 
-O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuários e grupos**, **Políticas** e **Administração**. Em **Usuários e grupos**: *Usuários* (procurar uma pessoa e ver todos os prompts dela), *Risco por usuário* e *Grupos* (escolher pessoas na lista, inclusive todas que começam com um texto). As seções do menu expandem e recolhem. Em **Políticas**: *Exceções*, *Domínios permitidos* e *Palavras-chave*. Em **Administração**: *Colaboradores* (quem tem acesso ao console e a função de cada um: administrador, analista, auditor ou leitura).
+O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuários e grupos**, **Políticas** e **Administração**. Em **Usuários e grupos**: *Usuários* (procurar uma pessoa e ver todos os prompts dela), *Risco por usuário* e *Grupos* (escolher pessoas na lista, inclusive todas que começam com um texto). As seções do menu expandem e recolhem. Em **Políticas**: *Exceções*, *Domínios permitidos* e *Palavras-chave*. Em **Administração**: *Colaboradores* (só o administrador vê: quem tem acesso ao console e a função de cada um: administrador, analista, auditor ou leitura; cria, edita, desativa e gera senha temporária). O console entra com **e-mail e senha** quando `LOCAL_AUTH=true` (ver `docs/instalacao-aws.md`, seção 10b); cada pessoa troca a própria senha em *Alterar senha*, no topo.
 
 | Tela | Para quê |
 |---|---|

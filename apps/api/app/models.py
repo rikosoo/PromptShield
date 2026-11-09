@@ -73,6 +73,13 @@ class User(Base):
     groups: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = _ts()
+    # login com e-mail e senha (só o hash; a senha nunca é guardada). `password_version` sobe a cada troca e derruba as sessões abertas.
+    password_hash: Mapped[str | None] = mapped_column(Text)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    password_version: Mapped[int] = mapped_column(Integer, default=1)
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ApiKey(Base):

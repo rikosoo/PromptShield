@@ -17,7 +17,9 @@ export const canTriage = (role: Me["role"]) => role === "admin" || role === "ana
 
 export function SessionProvider({ children }: { children: (ctx: Ctx) => ReactNode }) {
   const { data, error, loading, reload } = useLoad(async () => {
-    const [me, tenant, license] = await Promise.all([api<Me>("v1/me"), api<Tenant>("v1/tenant"),
+    const me = await api<Me>("v1/me");
+    if (me.must_change_password) { location.assign("/change-password"); await new Promise<never>(() => undefined); }      // senha provisória: só dá para trocar a senha
+    const [tenant, license] = await Promise.all([api<Tenant>("v1/tenant"),
       api<LicenseStatus>("v1/license/status").catch(() => undefined)]);     // servidor mais antigo, sem a rota: sem faixa de licença
     return { me, tenant, license };
   }, []);

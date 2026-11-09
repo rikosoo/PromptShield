@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
-from app import audit
+from app import audit, passwords
 from app.config import settings
 from app.db import tenant_session
 from app.models import ApiKey, AuditLog, Tenant, User
@@ -34,7 +34,13 @@ def actor_label(s, log: AuditLog, _cache: dict | None = None) -> str:
 
 @router.get("/me")
 def me(p: Annotated[Principal, Depends(current_principal)]) -> dict:
-    return {"kind": p.kind, "id": p.id, "tenant_id": str(p.tenant_id), "role": p.role, "email": p.email}
+    out = {"kind": p.kind, "id": p.id, "tenant_id": str(p.tenant_id), "role": p.role, "email": p.email,
+           "local_auth": settings.local_auth, "must_change_password": p.must_change_password, "has_password": False}
+    if p.kind == "user" and settings.local_auth:
+        with tenant_session(p.tenant_id) as s:
+            u = s.get(User, uuid.UUID(p.id))
+            out["has_password"] = bool(u and u.password_hash)
+    return out
 
 
 @router.get("/users/directory", summary="Pessoas que podem receber incidentes")
@@ -47,8 +53,11 @@ def user_directory(p: Annotated[Principal, Depends(require_roles("admin", "anali
 @router.get("/users")
 def list_users(p: Annotated[Principal, Depends(require_roles("admin"))]) -> list[dict]:
     with tenant_session(p.tenant_id) as s:
+        now = datetime.now(timezone.utc)
         return [{"id": str(u.id), "email": u.email, "display_name": u.display_name, "role": u.role, "department": u.department, "groups": u.groups,
-                 "active": u.active, "created_at": u.created_at.isoformat(), "is_me": str(u.id) == p.id}
+                 "active": u.active, "created_at": u.created_at.isoformat(), "is_me": str(u.id) == p.id,
+                 "has_password": bool(u.password_hash), "must_change_password": u.must_change_password,
+                 "locked": bool(u.locked_until and u.locked_until > now)}
                 for u in s.execute(select(User).order_by(User.email)).scalars()]
 
 
@@ -57,14 +66,41 @@ def create_user(body: UserIn, p: Annotated[Principal, Depends(require_roles("adm
     with tenant_session(p.tenant_id) as s:
         data = body.model_dump()
         data["email"] = data["email"].strip()
+        initial = data.pop("password")
+        if initial is not None and (msg := passwords.policy_message(initial)) is not None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, msg)
+        temporary = passwords.generate_temporary() if initial is None and settings.local_auth else None
+        secret_pw = initial if initial is not None else temporary
         u = User(tenant_id=p.tenant_id, **data)
+        if secret_pw is not None:       # senha inicial definida pelo administrador ou gerada: a pessoa é obrigada a trocar no primeiro acesso
+            u.password_hash, u.must_change_password = passwords.hash_password(secret_pw), True
         s.add(u)
         try:
             s.flush()
         except IntegrityError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, "e-mail já cadastrado") from exc
-        audit.write(s, p, "user.create", "user", str(u.id), {"role": u.role, "active": u.active})  # sem e-mail: o registro é imutável
-        return {"id": str(u.id), "email": u.email, "role": u.role, "active": u.active}
+        audit.write(s, p, "user.create", "user", str(u.id), {"role": u.role, "active": u.active, "password_set": secret_pw is not None})  # sem e-mail nem senha
+        out = {"id": str(u.id), "email": u.email, "role": u.role, "active": u.active, "must_change_password": u.must_change_password}
+        if temporary is not None:
+            out["temporary_password"] = temporary       # aparece só nesta resposta
+        return out
+
+
+@router.post("/users/{user_id}/password", summary="Gera uma senha temporária (aparece só nesta resposta); a pessoa é obrigada a trocar ao entrar e o bloqueio é desfeito")
+def reset_user_password(user_id: uuid.UUID, p: Annotated[Principal, Depends(require_roles("admin"))]) -> dict:
+    if not (settings.local_auth and settings.local_auth_secret):
+        raise HTTPException(status.HTTP_409_CONFLICT, "o login com senha está desligado neste servidor (LOCAL_AUTH)")
+    with tenant_session(p.tenant_id) as s:
+        u = s.get(User, user_id)
+        if u is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "colaborador não encontrado")
+        if str(u.id) == p.id:
+            raise HTTPException(status.HTTP_409_CONFLICT, "para trocar a sua própria senha use «Alterar senha»")
+        temporary = passwords.generate_temporary()
+        u.password_hash, u.must_change_password, u.password_version = passwords.hash_password(temporary), True, u.password_version + 1   # versão nova: derruba as sessões abertas
+        u.failed_logins, u.locked_until, u.password_changed_at = 0, None, datetime.now(timezone.utc)
+        audit.write(s, p, "user.password_reset", "user", str(u.id), {})
+        return {"temporary_password": temporary, "must_change_password": True}
 
 
 def _other_active_admins(s, user_id: uuid.UUID) -> int:

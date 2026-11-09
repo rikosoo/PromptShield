@@ -8,12 +8,13 @@ import { ROLE_LABEL } from "@/lib/labels";
 import { SessionProvider, useSession } from "./session";
 
 /** As cinco áreas do console. Cada página existente fica no grupo a que pertence. */
-const NAV_GROUPS = [
+interface NavItem { href: string; label: string; adminOnly?: boolean }      // adminOnly: o item nem aparece para as outras funções (a API também recusa)
+const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   { title: "Visão geral", items: [{ href: "/", label: "Visão geral" }, { href: "/prompts", label: "Análise de prompts" }, { href: "/reports", label: "Relatórios" }] },
   { title: "Incidentes", items: [{ href: "/incidents", label: "Incidentes" }, { href: "/alerts", label: "Alertas e SIEM" }, { href: "/history", label: "Todos os prompts" }, { href: "/quality", label: "Qualidade da detecção" }] },
   { title: "Usuários e grupos", items: [{ href: "/users", label: "Usuários" }, { href: "/risk", label: "Risco por usuário" }, { href: "/groups", label: "Grupos" }] },
   { title: "Políticas", items: [{ href: "/policies", label: "Políticas" }, { href: "/exceptions", label: "Exceções" }, { href: "/allowlist", label: "Domínios permitidos" }, { href: "/keywords", label: "Palavras-chave" }] },
-  { title: "Administração", items: [{ href: "/collaborators", label: "Colaboradores" }, { href: "/sensors", label: "Sensores" }, { href: "/devices", label: "Dispositivos" }, { href: "/license", label: "Licença" }, { href: "/privacy", label: "Privacidade e segurança" }, { href: "/inference-hooks", label: "Inference hooks" }, { href: "/pilot", label: "Piloto" }] },
+  { title: "Administração", items: [{ href: "/collaborators", label: "Colaboradores", adminOnly: true }, { href: "/sensors", label: "Sensores" }, { href: "/devices", label: "Dispositivos" }, { href: "/license", label: "Licença" }, { href: "/privacy", label: "Privacidade e segurança" }, { href: "/inference-hooks", label: "Inference hooks" }, { href: "/pilot", label: "Piloto" }] },
 ];
 
 function ThemeToggle() {
@@ -52,12 +53,13 @@ function useClosedSections(keepOpen?: string): [string[], (title: string) => voi
 
 function Frame({ children }: { children: ReactNode }) {
   const path = usePathname();
-  const activeTitle = NAV_GROUPS.find((g) => g.items.some((n) => (n.href === "/" ? path === "/" : path.startsWith(n.href))))?.title;
+  const { me, tenant, license } = useSession();
+  const visible = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((n) => !n.adminOnly || me.role === "admin") })).filter((g) => g.items.length > 0);
+  const activeTitle = visible.find((g) => g.items.some((n) => (n.href === "/" ? path === "/" : path.startsWith(n.href))))?.title;
   const [closed, toggleSection] = useClosedSections(activeTitle);
   // ao ir para uma página, a seção dela reabre (só na troca de página: recolher depois continua funcionando)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeTitle && closed.includes(activeTitle)) toggleSection(activeTitle); }, [path]);
-  const { me, tenant, license } = useSession();
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", headers: { "X-Requested-With": "promptshield" } });
     location.assign("/login");
@@ -68,7 +70,7 @@ function Frame({ children }: { children: ReactNode }) {
       <nav aria-label="Principal" className="bg-nav px-3 py-3 text-nav-fg lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:py-4">
         <div className="mb-2 px-2 text-base font-bold text-white lg:mb-4">PromptShield</div>
         <div className="flex flex-wrap gap-x-4 lg:block">
-          {NAV_GROUPS.map((g, gi) => {
+          {visible.map((g, gi) => {
             const open = !closed.includes(g.title);
             return (
               <div key={g.title} className="lg:mb-2">
@@ -105,6 +107,7 @@ function Frame({ children }: { children: ReactNode }) {
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted" data-testid="who">{me.email} · {me.role ? ROLE_LABEL[me.role] : ""}</span>
             <ThemeToggle />
+            {me.has_password && <Link href="/change-password" className="btn">Alterar senha</Link>}
             <button type="button" className="btn" onClick={logout}>Sair</button>
           </div>
         </header>

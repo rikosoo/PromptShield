@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const API = 8099, WEB = 3099;
+const API = 8099, WEB = 3099, WEB_LOCAL = 3098;      // WEB: login simulado (AUTH_MODE=mock); WEB_LOCAL: login com e-mail e senha (AUTH_MODE=local), mesma API
 const py = process.env.PS_PYTHON ?? "../../.venv/bin/python";
 
 // Pré-requisito: `npm run build`. Usa DATABASE_URL_TEST (banco de TESTE: é apagado e recriado) e CHROMIUM_PATH.
@@ -16,6 +16,10 @@ export default defineConfig({
     {
       command: `npx next start -p ${WEB}`, url: `http://127.0.0.1:${WEB}/login`, timeout: 60_000, reuseExistingServer: false,
       env: { API_INTERNAL_URL: `http://127.0.0.1:${API}`, AUTH_MODE: "mock", PUBLIC_BASE_URL: `http://127.0.0.1:${WEB}` },
+    },
+    {
+      command: `npx next start -p ${WEB_LOCAL}`, url: `http://127.0.0.1:${WEB_LOCAL}/login`, timeout: 60_000, reuseExistingServer: false,
+      env: { API_INTERNAL_URL: `http://127.0.0.1:${API}`, AUTH_MODE: "local", PUBLIC_BASE_URL: `http://127.0.0.1:${WEB_LOCAL}` },
     },
   ],
 });

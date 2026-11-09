@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -41,6 +42,14 @@ class Settings(BaseSettings):
     oidc_issuer: str | None = None
     oidc_audience: str | None = None
     oidc_jwks_url: str | None = None
+    # login do console com e-mail e senha (opcional, convive com os modos acima). A senha é guardada só como hash (scrypt); sessões duram `local_auth_ttl_hours`.
+    local_auth: bool = False
+    local_auth_secret: str | None = None          # assina as sessões (HS256); mínimo de 32 caracteres; troque para derrubar todas as sessões
+    local_auth_ttl_hours: int = 8
+    login_max_failures: int = 5                   # tentativas erradas seguidas até bloquear o acesso
+    login_lock_minutes: int = 15
+    login_per_email_per_minute: int = 10          # limite de tentativas por e-mail (o limite por IP é do proxy reverso)
+    login_global_per_minute: int = 300            # teto geral: cada tentativa gasta CPU (scrypt)
 
     # notificações (Etapa 7). Webhooks exigem https e destino público, salvo estas válvulas de desenvolvimento/teste.
     allow_insecure_webhooks: bool = False
@@ -69,6 +78,13 @@ class Settings(BaseSettings):
     # /metrics só existe se houver token (Authorization: Bearer ...); sem token a rota responde 404
     metrics_token: str | None = None
     log_json: bool = True
+
+    @model_validator(mode="after")
+    def _local_auth_needs_a_strong_secret(self) -> "Settings":
+        # falhar alto no arranque: sem segredo forte, as sessões do login com senha poderiam ser forjadas
+        if self.local_auth and len(self.local_auth_secret or "") < 32:
+            raise ValueError("LOCAL_AUTH=true exige LOCAL_AUTH_SECRET com pelo menos 32 caracteres (gere com: openssl rand -hex 32)")
+        return self
 
 
 settings = Settings()

@@ -16,6 +16,7 @@ from app.routers import (
     admin,
     alerts,
     analytics,
+    auth_local,
     enrollment,
     events,
     exports,
@@ -35,6 +36,9 @@ from app.routers import (
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     services.init_ner()
+    if settings.local_auth and settings.oidc_mode == "mock":
+        logging.getLogger("promptshield").warning("OIDC_MODE=mock com LOCAL_AUTH=true: POST /dev/token emite sessão para QUALQUER e-mail e contorna a senha. "
+                                                  "Use só em desenvolvimento; em produção deixe OIDC_MODE=off.")
     yield
 
 
@@ -101,6 +105,7 @@ app.include_router(incidents.router)
 app.include_router(policies.router)
 app.include_router(governance.router)
 app.include_router(keywords_router)
+app.include_router(auth_local.router)
 app.include_router(admin.router)
 app.include_router(analytics.router)
 app.include_router(alerts.router)

@@ -18,5 +18,7 @@ export function cookieMaxAge(token: string, fallbackSeconds = 3600, nowSeconds =
 }
 
 export const apiBase = () => (process.env.API_INTERNAL_URL ?? "http://localhost:8000").replace(/\/+$/, "");
-export const authMode = () => (process.env.AUTH_MODE === "mock" ? "mock" : "oidc");
+export type AuthMode = "mock" | "local" | "oidc";
+/** mock: login simulado de desenvolvimento (só e-mail); local: e-mail e senha (a API precisa de LOCAL_AUTH=true); oidc: login da empresa. */
+export const authMode = (): AuthMode => (process.env.AUTH_MODE === "mock" ? "mock" : process.env.AUTH_MODE === "local" ? "local" : "oidc");
 export const secureCookies = () => (process.env.PUBLIC_BASE_URL ?? "").startsWith("https://");

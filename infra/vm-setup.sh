@@ -36,7 +36,7 @@ if [ ! -f .env ]; then
   cp .env.example .env
   rnd() { openssl rand -hex 24; }
   sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(rnd)/; s/^APP_DB_PASSWORD=.*/APP_DB_PASSWORD=$(rnd)/; \
-          s/^OIDC_MODE=.*/OIDC_MODE=mock/; s/^OIDC_MOCK_SECRET=.*/OIDC_MOCK_SECRET=$(openssl rand -hex 32)/; s/^AUTH_MODE=.*/AUTH_MODE=mock/" .env
+          s/^OIDC_MODE=.*/OIDC_MODE=mock/; s/^OIDC_MOCK_SECRET=.*/OIDC_MOCK_SECRET=$(openssl rand -hex 32)/; s/^AUTH_MODE=.*/AUTH_MODE=mock/; s/^LOCAL_AUTH_SECRET=.*/LOCAL_AUTH_SECRET=$(openssl rand -hex 32)/" .env
   chmod 600 .env
   echo ".env criado com segredos aleatórios (modo de login MOCK: só para teste)."
 fi

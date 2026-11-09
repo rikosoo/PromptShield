@@ -6,6 +6,7 @@ import { Chip, Empty, ErrorBox, Loading, Panel } from "@/components/ui";
 import { api, send, useLoad } from "@/lib/api";
 import { whenFull } from "@/lib/format";
 import { ROLE_CAN, ROLE_LABEL } from "@/lib/labels";
+import { passwordOk, passwordRules } from "@/lib/password";
 import type { Collaborator } from "@/lib/types";
 
 type Role = Collaborator["role"];
@@ -16,7 +17,10 @@ export default function CollaboratorsPage() {
   const { me } = useSession();
   const isAdmin = me.role === "admin";
   const rows = useLoad(() => (isAdmin ? api<Collaborator[]>("v1/users") : Promise.resolve([] as Collaborator[])), [isAdmin]);
-  const [form, setForm] = useState({ email: "", name: "", role: "leitura" as Role, department: "", active: true });
+  const localAuth = !!me.local_auth;
+  const [temp, setTemp] = useState<{ email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [form, setForm] = useState({ email: "", name: "", role: "leitura" as Role, department: "", active: true, password: "" });
   const [edit, setEdit] = useState<{ row: Collaborator; name: string; role: Role; department: string } | null>(null);
   const [editErr, setEditErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -31,12 +35,20 @@ export default function CollaboratorsPage() {
   }
   const add = (ev: FormEvent) => {
     ev.preventDefault();
+    if (form.password && !passwordOk(form.password)) { setMsg({ ok: false, text: "A senha inicial não cumpre a política (veja os requisitos abaixo do campo)." }); return; }
+    const email = form.email.trim();
     void run(async () => {
-      await send("POST", "v1/users", { email: form.email.trim(), display_name: form.name.trim() || null, role: form.role, department: form.department.trim() || null, active: form.active });
-      setForm({ email: "", name: "", role: "leitura", department: "", active: true });
-    }, "Colaborador cadastrado. Ele entra com o login da empresa usando este e-mail.");
+      const r = await send<{ temporary_password?: string }>("POST", "v1/users", { email, display_name: form.name.trim() || null, role: form.role, department: form.department.trim() || null, active: form.active, ...(form.password ? { password: form.password } : {}) });
+      setForm({ email: "", name: "", role: "leitura", department: "", active: true, password: "" });
+      if (r.temporary_password) { setCopied(false); setTemp({ email, password: r.temporary_password }); }
+    }, localAuth ? "Colaborador cadastrado. Ele entra com o e-mail e a senha e é obrigado a trocá-la no primeiro acesso." : "Colaborador cadastrado. Ele entra com o login da empresa usando este e-mail.");
   };
   const toggle = (r: Collaborator) => void run(() => send("PATCH", `v1/users/${r.id}`, { active: !r.active }), r.active ? "Acesso desativado: a pessoa não entra mais." : "Acesso reativado.");
+  const resetPassword = (r: Collaborator) => {
+    if (!confirm(`Gerar uma senha temporária para ${r.email}? A senha atual deixa de valer e as sessões abertas dele são encerradas.`)) return;
+    void run(async () => { const x = await send<{ temporary_password: string }>("POST", `v1/users/${r.id}/password`); setCopied(false); setTemp({ email: r.email, password: x.temporary_password }); }, "Senha temporária gerada.");
+  };
+  async function copy() { try { await navigator.clipboard.writeText(temp!.password); setCopied(true); } catch { setCopied(false); } }
   const remove = (r: Collaborator) => { if (confirm(`Remover ${r.email}? A pessoa perde o acesso. O registro de auditoria guarda só o identificador interno.`)) void run(() => send("DELETE", `v1/users/${r.id}`), "Colaborador removido."); };
   const openEdit = (r: Collaborator) => { setEditErr(null); setEdit({ row: r, name: r.display_name ?? "", role: r.role, department: r.department ?? "" }); };
   async function saveEdit(ev: FormEvent) {
@@ -73,6 +85,12 @@ export default function CollaboratorsPage() {
                 <p className="mt-1 text-xs text-muted">{ROLE_CAN[form.role]}</p></div>
               <div><label htmlFor="cdept" className="block text-xs text-muted">Departamento (opcional)</label><input id="cdept" className="field w-full" maxLength={120} value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
                 <label className="mt-3 block text-sm"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Acesso ativo</label></div>
+              {localAuth && (
+                <div className="md:col-span-2"><label htmlFor="cpass" className="block text-xs text-muted">Senha inicial (opcional: vazia, o sistema gera uma temporária e mostra uma vez)</label>
+                  <input id="cpass" type="password" autoComplete="new-password" maxLength={128} className="field w-full md:w-1/2" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} aria-describedby="crules" />
+                  {form.password && <ul id="crules" className="mt-1 space-y-0.5 text-xs">{passwordRules(form.password).map((x) => <li key={x.id} className={x.ok ? "text-low" : "text-muted"}><span aria-hidden="true">{x.ok ? "✓" : "○"}</span> {x.label}</li>)}</ul>}
+                  <p className="mt-1 text-xs text-muted">Em qualquer caso, a pessoa é obrigada a trocar a senha no primeiro acesso.</p></div>
+              )}
               <div><button type="submit" className="btn-primary" disabled={busy || !form.email.trim()}>Adicionar</button></div>
             </form>
           </Panel>
@@ -91,10 +109,12 @@ export default function CollaboratorsPage() {
                         <th scope="row" className="td text-left font-normal"><div className="font-medium">{r.display_name ?? r.email}{r.is_me && <span className="ml-2"><Chip>você</Chip></span>}</div>{r.display_name && <div className="text-xs text-muted">{r.email}</div>}</th>
                         <td className="td">{ROLE_LABEL[r.role]}</td>
                         <td className="td">{r.department ?? "—"}</td>
-                        <td className="td">{r.active ? "Ativo" : <span className="text-high">Desativado</span>}</td>
+                        <td className="td">{r.active ? "Ativo" : <span className="text-high">Desativado</span>}
+                          {localAuth && <div className="text-xs text-muted">{!r.has_password ? "sem senha (não entra)" : r.must_change_password ? "senha provisória: troca pendente" : "senha definida"}{r.locked && <span className="ml-1 text-high">· bloqueado por tentativas</span>}</div>}</td>
                         <td className="td whitespace-nowrap font-mono text-xs">{whenFull(r.created_at)}</td>
                         <td className="td space-x-2 whitespace-nowrap text-right">
                           <button type="button" className="btn" disabled={busy} onClick={() => openEdit(r)} aria-label={`Editar ${r.email}`}>Editar</button>
+                          {localAuth && !r.is_me && <button type="button" className="btn" disabled={busy} onClick={() => resetPassword(r)} aria-label={`Nova senha temporária para ${r.email}`}>Nova senha</button>}
                           <button type="button" className="btn" disabled={busy} onClick={() => toggle(r)} aria-label={`${r.active ? "Desativar" : "Reativar"} ${r.email}`}>{r.active ? "Desativar" : "Reativar"}</button>
                           <button type="button" className="btn" disabled={busy || r.is_me} onClick={() => remove(r)} aria-label={`Remover ${r.email}`} title={r.is_me ? "Você não pode remover a si mesmo" : undefined}>Remover</button>
                         </td>
@@ -107,6 +127,19 @@ export default function CollaboratorsPage() {
           </Panel>
         </>
       )}
+      <Dialog open={!!temp} onClose={() => setTemp(null)} title="Senha temporária" confirmClose="Esta senha aparece só agora. Já copiou e passou para a pessoa?">
+        {temp && (
+          <div className="space-y-3 text-sm" data-testid="temp-password">
+            <p>Passe esta senha para <strong>{temp.email}</strong> por um canal seguro. Ela <strong>não será mostrada de novo</strong>, e a pessoa é obrigada a trocá-la ao entrar.</p>
+            <p className="rounded border border-line bg-panel2 p-3 font-mono text-base" data-testid="temp-password-value">{temp.password}</p>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {copied && <span role="status" className="text-xs text-low">Copiada.</span>}
+              <button type="button" className="btn" onClick={() => void copy()}>Copiar</button>
+              <button type="button" className="btn-primary" onClick={() => setTemp(null)}>Já anotei</button>
+            </div>
+          </div>
+        )}
+      </Dialog>
       <Dialog open={!!edit} onClose={() => setEdit(null)} title="Editar colaborador">
         {edit && (
           <form onSubmit={saveEdit} className="space-y-3 text-sm" aria-label="Editar colaborador">

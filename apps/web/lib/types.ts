@@ -4,7 +4,7 @@ export type Severity = "baixo" | "medio" | "alto" | "critico";
 export type IncidentStatus = "aberto" | "em analise" | "resolvido" | "falso positivo";
 export type Action = "allow" | "mask" | "block" | "ask_justification" | "alert";
 
-export interface Me { kind: string; id: string; tenant_id: string; role: Role | null; email: string | null }
+export interface Me { kind: string; id: string; tenant_id: string; role: Role | null; email: string | null; local_auth?: boolean; must_change_password?: boolean; has_password?: boolean }
 export interface Tenant {
   id: string; name: string; failure_mode: "open" | "closed"; retention_days: number; store_original: boolean;
   policy_url: string | null; monitored_domains: string[]; contract?: Contract; monitoring_mode?: "passive" | "legacy_enforcement"; is_demo: boolean; volume_threshold_per_hour: number; original_retention_days: number; omit_text_categories: string[];
@@ -148,4 +148,4 @@ export interface PolicyExceptionRow {
 export interface KeywordRow { id: string; term: string; whole_word: boolean; fuzzy: boolean; score: number | null; enabled: boolean; note: string | null; created_by: string; created_at: string }
 export interface AllowlistRow { id: string; kind: "host"; value: string; note: string | null; created_by: string; created_at: string }
 
-export interface Collaborator { id: string; email: string; display_name: string | null; role: "admin" | "analista" | "auditor" | "leitura"; department: string | null; active: boolean; created_at: string; is_me: boolean }
+export interface Collaborator { id: string; email: string; display_name: string | null; role: "admin" | "analista" | "auditor" | "leitura"; department: string | null; active: boolean; created_at: string; is_me: boolean; has_password?: boolean; must_change_password?: boolean; locked?: boolean }

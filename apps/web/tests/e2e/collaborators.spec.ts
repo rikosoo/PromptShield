@@ -23,6 +23,8 @@ test("colaboradores: administrador cria com função e departamento, a pessoa en
   await page.getByLabel("Função").selectOption("analista");
   await page.getByLabel("Departamento (opcional)").fill("Segurança");
   await page.getByRole("button", { name: "Adicionar", exact: true }).click();
+  await expect(page.getByTestId("temp-password-value")).toBeVisible();             // com o login por senha ligado, a senha temporária aparece uma vez
+  await page.getByRole("button", { name: "Já anotei" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Colaborador cadastrado" })).toBeVisible();
   const row = page.getByTestId("collab-row").filter({ hasText: email });
   await expect(row).toContainText("Analista");
@@ -82,4 +84,19 @@ test("colaboradores: o único administrador não se rebaixa nem se desativa", as
   await dlg.getByLabel("Função").selectOption("leitura");
   await dlg.getByRole("button", { name: "Salvar" }).click();
   await expect(dlg.getByRole("alert")).toBeVisible();
+});
+
+test("menu: Colaboradores só aparece para o administrador (analista, auditor e leitura nem veem o item)", async ({ page }) => {
+  await login(page, USERS.admin);
+  await expect(page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Colaboradores" })).toBeVisible();
+  await logout(page);
+  for (const who of [USERS.analista, USERS.auditor, USERS.leitura]) {
+    await login(page, who);
+    await expect(page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Colaboradores" })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Sensores" })).toBeVisible();      // o resto do menu segue
+    await page.goto("/collaborators");                                                                                         // pelo endereço direto: aviso, sem lista
+    await expect(page.getByText("Só administradores veem e alteram")).toBeVisible();
+    await expect(page.getByTestId("collab-table")).toHaveCount(0);
+    await logout(page);
+  }
 });

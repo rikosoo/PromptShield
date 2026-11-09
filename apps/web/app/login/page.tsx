@@ -2,8 +2,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<"mock" | "oidc" | null>(null);
+  const [mode, setMode] = useState<"mock" | "local" | "oidc" | null>(null);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -17,8 +18,8 @@ export default function LoginPage() {
     ev.preventDefault();
     setBusy(true);
     setError(null);
-    const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "promptshield" }, body: JSON.stringify({ email }) });
-    if (r.ok) { location.assign("/"); return; }
+    const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "promptshield" }, body: JSON.stringify({ email, password }) });
+    if (r.ok) { const j = (await r.json().catch(() => ({}))) as { must_change_password?: boolean }; location.assign(j.must_change_password ? "/change-password" : "/"); return; }
     setError((await r.json().catch(() => ({}))).error ?? "Não foi possível entrar.");
     setBusy(false);
   }
@@ -40,6 +41,20 @@ export default function LoginPage() {
               <input id="email" name="email" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className="field w-full" />
             </div>
             <button type="submit" className="btn-primary w-full" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
+          </form>
+        )}
+        {mode === "local" && (
+          <form onSubmit={submit} className="mt-5 space-y-3" aria-label="Entrar com e-mail e senha">
+            <div>
+              <label htmlFor="email" className="mb-1 block text-sm font-medium">E-mail</label>
+              <input id="email" name="email" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className="field w-full" />
+            </div>
+            <div>
+              <label htmlFor="password" className="mb-1 block text-sm font-medium">Senha</label>
+              <input id="password" name="password" type="password" required autoComplete="current-password" maxLength={256} value={password} onChange={(e) => setPassword(e.target.value)} className="field w-full" />
+            </div>
+            <button type="submit" className="btn-primary w-full" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
+            <p className="text-xs text-muted">Esqueceu a senha? Peça ao administrador da sua empresa uma senha temporária.</p>
           </form>
         )}
         {mode === null && !error && <p role="status" className="mt-5 text-sm text-muted">Carregando…</p>}

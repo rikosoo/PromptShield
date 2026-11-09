@@ -80,10 +80,39 @@ def main() -> None:
     sp.add_argument("--reason", default="", help="texto curto que o administrador da empresa vê no console (ex.: fatura em atraso)")
     rs = sub.add_parser("resume", help="reativa uma empresa suspensa")
     rs.add_argument("--slug", required=True)
+    pw = sub.add_parser("set-password", help="define a senha de um usuário do console (é assim que o primeiro administrador passa a ter senha)")
+    pw.add_argument("--email", required=True)
+    pw.add_argument("--generate", action="store_true", help="gera uma senha temporária e a mostra UMA vez; a pessoa troca no primeiro acesso (padrão se não houver terminal)")
     sub.add_parser("tenants", help="lista as empresas: situação do contrato, validade, limite e máquinas ativas (só o fornecedor)")
     sub.add_parser("rewrap-keys", help="troca a chave mestra: reembrulha as chaves de dados (lê OLD_MASTER_KEY e NEW_MASTER_KEY do ambiente)")
     args = ap.parse_args()
     url = settings.admin_database_url or settings.database_url
+    if args.cmd == "set-password":
+        import getpass
+        import sys
+        from datetime import datetime, timezone
+
+        from app import passwords
+
+        generate = args.generate or not sys.stdin.isatty()
+        if generate:
+            new = passwords.generate_temporary()
+        else:
+            new = getpass.getpass("Nova senha: ")
+            if new != getpass.getpass("Repita a senha: "):
+                raise SystemExit("as senhas não conferem")
+            if (msg := passwords.policy_message(new)) is not None:
+                raise SystemExit(msg)
+        with Session(create_engine(url)) as s, s.begin():
+            row = s.execute(text("SELECT user_id, tenant_id FROM auth_login_lookup(:e)"), {"e": args.email.strip()}).first()
+            if row is None:
+                raise SystemExit("usuário não encontrado ou inativo")
+            s.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(row.tenant_id)})
+            s.execute(text("""UPDATE users SET password_hash = :h, must_change_password = :m, password_version = password_version + 1,
+                              failed_logins = 0, locked_until = NULL, password_changed_at = :n WHERE id = :u"""),
+                      {"h": passwords.hash_password(new), "m": generate, "n": datetime.now(timezone.utc), "u": row.user_id})
+        print(f"Senha de {args.email} definida." + (f" Senha temporária (aparece só agora; a pessoa troca ao entrar): {new}" if generate else ""))
+        return
     if args.cmd == "seed-demo":
         from app.demo import seed_demo
 
