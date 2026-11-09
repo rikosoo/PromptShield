@@ -14,7 +14,7 @@ from app import audit
 from app.config import settings
 from app.db import tenant_session
 from app.models import ApiKey, AuditLog, Tenant, User
-from app.schemas import ApiKeyIn, ApiKeyRotate, TenantPatch, UserIn
+from app.schemas import ApiKeyIn, ApiKeyRotate, TenantPatch, UserIn, UserPatch
 from app.security import Principal, current_principal, generate_api_key, require_ingest, require_roles
 
 router = APIRouter(prefix="/v1", tags=["administração"])
@@ -47,21 +47,53 @@ def user_directory(p: Annotated[Principal, Depends(require_roles("admin", "anali
 @router.get("/users")
 def list_users(p: Annotated[Principal, Depends(require_roles("admin"))]) -> list[dict]:
     with tenant_session(p.tenant_id) as s:
-        return [{"id": str(u.id), "email": u.email, "role": u.role, "department": u.department, "groups": u.groups, "active": u.active}
+        return [{"id": str(u.id), "email": u.email, "display_name": u.display_name, "role": u.role, "department": u.department, "groups": u.groups,
+                 "active": u.active, "created_at": u.created_at.isoformat(), "is_me": str(u.id) == p.id}
                 for u in s.execute(select(User).order_by(User.email)).scalars()]
 
 
 @router.post("/users", status_code=201)
 def create_user(body: UserIn, p: Annotated[Principal, Depends(require_roles("admin"))]) -> dict:
     with tenant_session(p.tenant_id) as s:
-        u = User(tenant_id=p.tenant_id, **body.model_dump())
+        data = body.model_dump()
+        data["email"] = data["email"].strip()
+        u = User(tenant_id=p.tenant_id, **data)
         s.add(u)
         try:
             s.flush()
         except IntegrityError as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, "e-mail já cadastrado") from exc
-        audit.write(s, p, "user.create", "user", str(u.id), {"role": u.role})  # sem e-mail: o registro é imutável
-        return {"id": str(u.id), "email": u.email, "role": u.role}
+        audit.write(s, p, "user.create", "user", str(u.id), {"role": u.role, "active": u.active})  # sem e-mail: o registro é imutável
+        return {"id": str(u.id), "email": u.email, "role": u.role, "active": u.active}
+
+
+def _other_active_admins(s, user_id: uuid.UUID) -> int:
+    return s.execute(select(func.count()).select_from(User).where(User.role == "admin", User.active.is_(True), User.id != user_id)).scalar_one()
+
+
+@router.patch("/users/{user_id}", summary="Altera função, nome, departamento ou liga/desliga o acesso de um colaborador (auditado)")
+def update_user(user_id: uuid.UUID, body: UserPatch, p: Annotated[Principal, Depends(require_roles("admin"))]) -> dict:
+    with tenant_session(p.tenant_id) as s:
+        u = s.get(User, user_id)
+        if u is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "colaborador não encontrado")
+        changes = body.model_dump(exclude_unset=True)
+        if not changes:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "nada para alterar")
+        if changes.get("role", u.role) is None or changes.get("active", u.active) is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "função e estado não podem ficar vazios")
+        loses_admin = u.role == "admin" and u.active and (changes.get("role", u.role) != "admin" or changes.get("active", u.active) is False)
+        if loses_admin:
+            if str(u.id) == p.id:
+                raise HTTPException(status.HTTP_409_CONFLICT, "você não pode tirar o seu próprio acesso de administrador nem desativar a si mesmo; peça a outro administrador")
+            if _other_active_admins(s, u.id) == 0:
+                raise HTTPException(status.HTTP_409_CONFLICT, "não dá para tirar o último administrador ativo")
+        before = {k: getattr(u, k) for k in changes}
+        for k, v in changes.items():
+            setattr(u, k, v)
+        s.flush()
+        audit.write(s, p, "user.update", "user", str(u.id), {"before": before, "after": changes})       # sem e-mail
+        return {"id": str(u.id), "email": u.email, "display_name": u.display_name, "role": u.role, "department": u.department, "active": u.active}
 
 
 @router.delete("/users/{user_id}", status_code=204, summary="Remove um usuário do console (o registro de auditoria guarda só o UUID)")
@@ -72,7 +104,7 @@ def delete_user(user_id: uuid.UUID, p: Annotated[Principal, Depends(require_role
             raise HTTPException(status.HTTP_404_NOT_FOUND, "usuário não encontrado")
         if str(u.id) == p.id:
             raise HTTPException(status.HTTP_409_CONFLICT, "você não pode remover a si mesmo")
-        if u.role == "admin" and s.execute(select(func.count()).select_from(User).where(User.role == "admin", User.active.is_(True))).scalar_one() <= 1:
+        if u.role == "admin" and u.active and _other_active_admins(s, u.id) == 0:
             raise HTTPException(status.HTTP_409_CONFLICT, "não dá para remover o último administrador")
         s.delete(u)
         audit.write(s, p, "user.delete", "user", str(user_id), {"role": u.role})

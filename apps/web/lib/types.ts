@@ -66,7 +66,7 @@ export interface QualitySummary {
 export interface Incident {
   id: string; severity: Severity; status: IncidentStatus; assignee_id: string | null; assignee_email: string | null; confidence: number;
   created_at: string; event_id: string; user_id: string; app: string; department: string | null; personal_account: boolean;
-  masked_text: string; has_original: boolean; categories: Category[]; risk_score: number;
+  masked_text: string; has_original: boolean; categories: Category[]; keyword_hits?: string[]; risk_score: number;
   reasons: { rule: string; contribution: number }[]; decision: Action; would_decide: Action;
   timeline?: { at: string; what: string }[]; recommendations?: string[];
 }
@@ -147,3 +147,5 @@ export interface PolicyExceptionRow {
 }
 export interface KeywordRow { id: string; term: string; whole_word: boolean; fuzzy: boolean; score: number | null; enabled: boolean; note: string | null; created_by: string; created_at: string }
 export interface AllowlistRow { id: string; kind: "host"; value: string; note: string | null; created_by: string; created_at: string }
+
+export interface Collaborator { id: string; email: string; display_name: string | null; role: "admin" | "analista" | "auditor" | "leitura"; department: string | null; active: boolean; created_at: string; is_me: boolean }

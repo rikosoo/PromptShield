@@ -16,6 +16,7 @@ from app.schemas import IncidentPatch
 from app.security import READ_ROLES, Principal, require_roles
 
 router = APIRouter(prefix="/v1/incidents", tags=["incidentes"])
+STATUSES = ("aberto", "em analise", "resolvido", "falso positivo")
 
 
 def _view(i: Incident, e: Event, a: Analysis, assignee: str | None = None) -> dict:
@@ -25,7 +26,8 @@ def _view(i: Incident, e: Event, a: Analysis, assignee: str | None = None) -> di
             "created_at": i.created_at.isoformat(), "event_id": str(e.event_id), "user_id": e.user_id, "app": e.app,
             "department": e.department, "personal_account": e.personal_account,
             "masked_text": e.masked_text, "has_original": e.original_ciphertext is not None, "categories": a.categories,
-            "risk_score": a.risk_score, "reasons": a.reasons, "decision": a.decision, "would_decide": a.would_decide}
+            "risk_score": a.risk_score, "reasons": a.reasons, "decision": a.decision, "would_decide": a.would_decide,
+            "keyword_hits": (a.flags or {}).get("keyword_hits", [])}
 
 
 def _detail(s: Session, incident_id: uuid.UUID) -> dict | None:
@@ -51,7 +53,7 @@ def _detail(s: Session, incident_id: uuid.UUID) -> dict | None:
     return out
 
 
-@router.get("", summary="Fila de incidentes (eventos com risco alto ou crítico)")
+@router.get("", summary="Fila de incidentes (risco alto ou crítico, ou palavra-chave); status aceita vários separados por vírgula")
 def list_incidents(p: Annotated[Principal, Depends(require_roles(*READ_ROLES))], status_: str | None = Query(None, alias="status"),
                    severity: str | None = None, assignee_id: uuid.UUID | None = None, category: str | None = None,
                    limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)) -> list[dict]:
@@ -60,8 +62,11 @@ def list_incidents(p: Annotated[Principal, Depends(require_roles(*READ_ROLES))],
     with tenant_session(p.tenant_id) as s:
         q = (select(Incident, Event, Analysis, User.email).join(Event, Event.id == Incident.event_pk)
              .join(Analysis, Analysis.event_pk == Event.id).outerjoin(User, User.id == Incident.assignee_id))
-        if status_:
-            q = q.where(Incident.status == status_)
+        if status_:      # um ou vários, separados por vírgula (ex.: "aberto,em analise" = pendentes)
+            wanted = [x.strip() for x in status_.split(",") if x.strip()]
+            if not wanted or any(x not in STATUSES for x in wanted):
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"status inválido; use {', '.join(STATUSES)} (vários separados por vírgula)")
+            q = q.where(Incident.status.in_(wanted))
         if severity:
             q = q.where(Incident.severity == severity)
         if assignee_id:

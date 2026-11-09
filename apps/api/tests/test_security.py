@@ -43,7 +43,7 @@ EXPECTED: dict[tuple[str, str], object] = {
     ("POST", "/v1/api-keys/{key_id}/rotate"): ADMIN, ("GET", "/v1/channels"): ADMIN, ("POST", "/v1/channels"): ADMIN,
     ("PATCH", "/v1/channels/{channel_id}"): ADMIN, ("DELETE", "/v1/channels/{channel_id}"): ADMIN,
     ("POST", "/v1/channels/{channel_id}/test"): ADMIN, ("PATCH", "/v1/tenant"): ADMIN, ("GET", "/v1/users"): ADMIN,
-    ("POST", "/v1/users"): ADMIN, ("DELETE", "/v1/users/{user_id}"): ADMIN, ("POST", "/v1/policies"): ADMIN,
+    ("POST", "/v1/users"): ADMIN, ("PATCH", "/v1/users/{user_id}"): ADMIN, ("DELETE", "/v1/users/{user_id}"): ADMIN, ("POST", "/v1/policies"): ADMIN,
     ("PUT", "/v1/policies/{policy_id}"): ADMIN, ("PUT", "/v1/inference-hook/config"): ADMIN, ("PUT", "/v1/inference-hook/secret"): ADMIN,
     ("POST", "/v1/privacy/subject/erase"): ADMIN, ("POST", "/v1/privacy/retention/run"): ADMIN,
     ("POST", "/v1/reports/schedules"): ADMIN, ("DELETE", "/v1/reports/schedules/{schedule_id}"): ADMIN,

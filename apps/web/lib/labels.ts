@@ -10,6 +10,13 @@ export const ACTION_LABEL: Record<Action, string> = {
   allow: "Permitir", mask: "Mascarar", block: "Bloquear", ask_justification: "Pedir justificativa", alert: "Alertar",
 };
 export const ROLE_LABEL = { admin: "Administrador", analista: "Analista", auditor: "Auditor", leitura: "Leitura" } as const;
+/** O que cada função pode fazer no console (conferido nas rotas da API). */
+export const ROLE_CAN: Record<keyof typeof ROLE_LABEL, string> = {
+  admin: "Tudo: consulta, trata incidentes, pede o texto original, configura políticas, privacidade, canais, chaves, dispositivos e colaboradores.",
+  analista: "Consulta tudo, trata incidentes (status e responsável), pede o texto original com justificativa, simula políticas e revisa análises. Não altera configurações.",
+  auditor: "Consulta tudo, exporta dados e vê o registro de auditoria. Não trata incidentes nem vê o texto original.",
+  leitura: "Só consulta os painéis, os prompts e os incidentes. Não altera nem exporta nada.",
+};
 export const APP_LABEL: Record<string, string> = {
   claude_code: "Claude Code", gemini_web: "Gemini (web)", copilot_web: "Copilot (web)", claude_code_import: "Claude Code (histórico importado)", github_copilot_cli: "GitHub Copilot CLI", codex_cli: "Codex (CLI)", chatgpt_web: "ChatGPT (web)", claude_web: "Claude (web)", claude_ai: "Claude Enterprise (claude.ai)", cowork: "Claude Cowork", cursor: "Cursor",
 };

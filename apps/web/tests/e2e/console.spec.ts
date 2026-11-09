@@ -132,15 +132,15 @@ test("análise de prompts: ordenação por risco, filtros e painel de categorias
 test("incidentes: fila, detalhe com linha do tempo, triagem e texto original com justificativa", async ({ page }) => {
   await login(page, USERS.admin);
   await page.goto("/incidents");
-  const list = (await apiGet<{ id: string; severity: string }[]>(page, "v1/incidents?limit=100")).data;
+  const list = (await apiGet<{ id: string; severity: string }[]>(page, "v1/incidents?status=aberto,em analise&limit=100")).data;     // o padrão da tela: só pendentes
   expect(list.length).toBeGreaterThan(5);
   await expect(page.getByTestId("incident-row")).toHaveCount(list.length);
   await page.getByLabel("Severidade").selectOption("critico");
-  const crit = (await apiGet<unknown[]>(page, "v1/incidents?severity=critico&limit=100")).data;
+  const crit = (await apiGet<unknown[]>(page, "v1/incidents?severity=critico&status=aberto,em analise&limit=100")).data;
   await expect(page.getByTestId("incident-row")).toHaveCount(crit.length);
   await page.getByLabel("Severidade").selectOption("");
 
-  await page.getByTestId("incident-row").first().getByRole("link").click();
+  await page.getByTestId("incident-row").first().getByRole("link").first().click();
   await expect(page).toHaveURL(/\/incidents\/[0-9a-f-]{36}/);
   const id = page.url().split("/").pop()!;
   const inc = (await apiGet<{ timeline: unknown[]; recommendations: string[]; masked_text: string; has_original: boolean }>(page, `v1/incidents/${id}`)).data;
@@ -177,7 +177,7 @@ test("incidentes: leitura e auditor não triam nem pedem o original", async ({ p
   for (const who of [USERS.leitura, USERS.auditor]) {
     await login(page, who);
     await page.goto("/incidents");
-    await page.getByTestId("incident-row").first().getByRole("link").click();
+    await page.getByTestId("incident-row").first().getByRole("link").first().click();
     await expect(page.getByLabel("Status")).toBeDisabled();
     await expect(page.getByRole("button", { name: "Ver texto original" })).toHaveCount(0);
     await logout(page);
@@ -306,4 +306,54 @@ test("cabeçalhos de segurança e nenhuma violação da política de conteúdo",
   const api = await page.request.get("/api/proxy/v1/me");
   expect(api.headers()["content-security-policy"]).toBeTruthy();   // também nas rotas da API do console
   expect(violations).toEqual([]);
+});
+
+
+test("incidentes: ações rápidas na fila, tratados saem da vista, filtro Todos traz de volta, desfazer e seleção em lote", async ({ page }) => {
+  await login(page, USERS.admin);
+  await page.goto("/incidents");
+  const rows = page.getByTestId("incident-row");
+  const pending = (await apiGet<{ id: string }[]>(page, "v1/incidents?status=aberto,em analise&limit=100")).data;
+  expect(pending.length).toBeGreaterThan(3);
+  await expect(rows).toHaveCount(pending.length);
+  await expectAccessible(page, "fila de incidentes");
+
+  // um só: Resolver sai da vista padrão; Desfazer volta
+  const firstId = pending[0].id;
+  await rows.first().getByRole("button", { name: /^Resolver:/ }).click();
+  await expect(page.getByRole("status").filter({ hasText: "marcado(s) como «Resolvido»" })).toBeVisible();
+  await expect(rows).toHaveCount(pending.length - 1);
+  expect((await apiGet<{ status: string }>(page, `v1/incidents/${firstId}`)).data.status).toBe("resolvido");
+  await page.getByLabel("Status").selectOption("todos");
+  await expect(rows).toHaveCount((await apiGet<unknown[]>(page, "v1/incidents?limit=100")).data.length);
+  await page.getByLabel("Status").selectOption("pendentes");
+  await expect(rows).toHaveCount(pending.length - 1);
+  await page.getByRole("button", { name: "Desfazer" }).click();
+  await expect(rows).toHaveCount(pending.length);
+  expect((await apiGet<{ status: string }>(page, `v1/incidents/${firstId}`)).data.status).toBe("aberto");
+
+  // em análise continua pendente; lote: marcar dois como falso positivo
+  await rows.first().getByRole("button", { name: /^Em análise:/ }).click();
+  await expect(rows).toHaveCount(pending.length);
+  await expect(rows.first().getByTestId("quick-actions").getByRole("button", { name: /^Reabrir:/ })).toBeVisible();
+  await rows.nth(0).getByRole("checkbox").check();
+  await rows.nth(1).getByRole("checkbox").check();
+  await expect(page.getByTestId("bulk-bar")).toContainText("2 selecionado(s)");
+  await page.getByTestId("bulk-bar").getByRole("button", { name: "Falso positivo" }).click();
+  await expect(rows).toHaveCount(pending.length - 2);
+  await page.getByLabel("Status").selectOption("falso positivo");
+  await expect(rows).toHaveCount(2);
+
+  // o texto da linha abre o detalhe
+  await rows.first().getByRole("link", { name: /Ver detalhes do incidente/ }).click();
+  await expect(page).toHaveURL(/\/incidents\/[0-9a-f-]{36}/);
+});
+
+test("incidentes: leitura vê a fila mas não tem botões de triagem", async ({ page }) => {
+  await login(page, USERS.leitura);
+  await page.goto("/incidents");
+  await expect(page.getByTestId("incident-row").first()).toBeVisible();
+  await expect(page.getByTestId("quick-actions")).toHaveCount(0);
+  await expect(page.getByTestId("bulk-bar")).toHaveCount(0);
+  await expect(page.getByText("Só administrador e analista alteram o status")).toBeVisible();
 });

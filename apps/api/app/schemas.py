@@ -132,13 +132,34 @@ class OriginalRequest(BaseModel):
     justification: str = Field(min_length=10, max_length=1000)
 
 
+def _clean_line(v: str | None) -> str | None:
+    if v is None:
+        return None
+    v = v.strip()
+    if any(ord(c) < 32 for c in v):
+        raise ValueError("uma linha só, sem caracteres de controle")
+    return v or None
+
+
 class UserIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    email: str = Field(min_length=3, max_length=320)
-    display_name: str | None = None
+    email: str = Field(min_length=3, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    display_name: str | None = Field(default=None, max_length=200)
     role: Literal["admin", "analista", "auditor", "leitura"]
-    department: str | None = None
+    department: str | None = Field(default=None, max_length=120)
     groups: list[str] = Field(default_factory=list)
+    active: bool = True
+    _n = field_validator("display_name", "department")(_clean_line)
+
+
+class UserPatch(BaseModel):
+    """Altera função, nome, departamento ou liga/desliga o acesso. O e-mail não muda (é a identidade do login e o registro de auditoria depende dele)."""
+    model_config = ConfigDict(extra="forbid")
+    display_name: str | None = Field(default=None, max_length=200)
+    role: Literal["admin", "analista", "auditor", "leitura"] | None = None
+    department: str | None = Field(default=None, max_length=120)
+    active: bool | None = None
+    _n = field_validator("display_name", "department")(_clean_line)
 
 
 class ApiKeyIn(BaseModel):

@@ -13,7 +13,7 @@ const NAV_GROUPS = [
   { title: "Incidentes", items: [{ href: "/incidents", label: "Incidentes" }, { href: "/alerts", label: "Alertas e SIEM" }, { href: "/history", label: "Todos os prompts" }, { href: "/quality", label: "Qualidade da detecção" }] },
   { title: "Usuários e grupos", items: [{ href: "/users", label: "Usuários" }, { href: "/risk", label: "Risco por usuário" }, { href: "/groups", label: "Grupos" }] },
   { title: "Políticas", items: [{ href: "/policies", label: "Políticas" }, { href: "/exceptions", label: "Exceções" }, { href: "/allowlist", label: "Domínios permitidos" }, { href: "/keywords", label: "Palavras-chave" }] },
-  { title: "Administração", items: [{ href: "/sensors", label: "Sensores" }, { href: "/devices", label: "Dispositivos" }, { href: "/license", label: "Licença" }, { href: "/privacy", label: "Privacidade e segurança" }, { href: "/inference-hooks", label: "Inference hooks" }, { href: "/pilot", label: "Piloto" }] },
+  { title: "Administração", items: [{ href: "/collaborators", label: "Colaboradores" }, { href: "/sensors", label: "Sensores" }, { href: "/devices", label: "Dispositivos" }, { href: "/license", label: "Licença" }, { href: "/privacy", label: "Privacidade e segurança" }, { href: "/inference-hooks", label: "Inference hooks" }, { href: "/pilot", label: "Piloto" }] },
 ];
 
 function ThemeToggle() {
