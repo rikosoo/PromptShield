@@ -8,7 +8,7 @@ export const dayLabel = (isoDate: string) => fmtDay.format(new Date(isoDate + "T
 export const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 /** Parte o texto mascarado em trechos, marcando as máscaras (***.***.***-25, [CPF], AKIA****...). */
-const MASK = /(\*{2,}[\w.\-*/@]*|[\w.\-]*\*{2,}[\w.\-*]*|\[(?:CPF|CNPJ|RG|nome|endereço|oculto|comando|trecho suspeito|caracteres ocultos|conta bancária)\])/g;
+const MASK = /(\[[A-Z_]{2,}(?: \*{4}\w+)?\]|\*{2,}[\w.\-*/@]*|[\w.\-]*\*{2,}[\w.\-*]*|\[(?:CPF|CNPJ|RG|nome|endereço|oculto|comando|trecho suspeito|caracteres ocultos|conta bancária)\])/g;
 export function splitMasks(text: string): { text: string; mask: boolean }[] {
   const out: { text: string; mask: boolean }[] = [];
   let last = 0;

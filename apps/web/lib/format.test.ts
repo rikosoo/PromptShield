@@ -21,3 +21,13 @@ describe("formatação", () => {
     expect([0, 24, 25, 49, 50, 69, 70, 100].map(severityOf)).toEqual(["baixo", "baixo", "medio", "medio", "alto", "alto", "critico", "critico"]);   // faixas do motor 2.0: 0-24, 25-49, 50-69, 70-100
   });
 });
+
+describe("realce das máscaras com final do valor", () => {
+  it("destaca [TOKEN ****5Yw1], [BOLETO ****5000] e AKIA****R3TN inteiros", () => {
+    const parts = (t: string) => splitMasks(t).filter((p) => p.mask).map((p) => p.text);
+    expect(parts("meu token é [TOKEN ****5Yw1] ok")).toEqual(["[TOKEN ****5Yw1]"]);
+    expect(parts("pague [BOLETO ****5000] hoje")).toEqual(["[BOLETO ****5000]"]);
+    expect(parts("chave AKIA****R3TN no deploy")).toEqual(["AKIA****R3TN"]);
+    expect(parts("texto comum sem máscara")).toEqual([]);
+  });
+});

@@ -116,8 +116,9 @@ def test_taxonomy_negative_examples_do_not_fire_their_category():
 def test_declared_cpf_is_pii_even_when_invalid(text):
     a = analyze(ev(text))
     assert "pii" in a.category_ids()
-    assert "[CPF]" in a.masked_text
-    assert not any(ch.isdigit() for ch in a.masked_text.split("cpf")[-1].split("CPF")[-1][:12]), a.masked_text
+    assert "[CPF ****" in a.masked_text and a.masked_text.count("****") == 1       # mostra só os 2 últimos dígitos (decisão do dono, 2026-11-09)
+    digits = "".join(ch for ch in text if ch.isdigit())
+    assert digits not in "".join(ch for ch in a.masked_text if ch.isdigit()) and digits[-3:] not in a.masked_text
 
 
 def test_number_before_the_word_cpf_is_not_declared():

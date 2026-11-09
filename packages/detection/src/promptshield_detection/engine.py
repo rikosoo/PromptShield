@@ -104,7 +104,7 @@ def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
                         has_code=has_code, external_url=agent.has_external_url(ctx), code_shared=floor, code_lines=n_lines)
     spans = [Span(f.start, f.end, f.span_type or "", f.masked or "[oculto]")
              for f in findings if f.start is not None and f.end is not None
-             and f.confidence >= THRESHOLD and f.span_type not in ("shell", "file")]
+             and f.confidence >= THRESHOLD and f.span_type not in ("shell", "file", "injection")]   # frase de ataque não é dado sensível: o texto fica legível
     seen: set[tuple[int, int]] = set()
     spans = [sp for sp in spans if not ((sp.start, sp.end) in seen or seen.add((sp.start, sp.end)))]
     spans = [_with_tail(ctx.text, sp) for sp in spans]
@@ -161,7 +161,13 @@ def _tail_len(n: int) -> int:
     return 4 if n >= 12 else 2 if n >= 8 else 0
 
 
+IDENT_TAIL = {"cpf": 2, "cnpj": 2, "rg": 2, "documento": 2, "nfe_key": 4, "boleto": 4}    # identificadores: o final ajuda a julgar se é real
+
+
 def _with_tail(text: str, sp: Span) -> Span:
+    if sp.type in IDENT_TAIL and sp.masked.endswith("]") and "*" not in sp.masked:
+        tail = "".join(ch for ch in text[sp.start:sp.end] if ch.isalnum())[-IDENT_TAIL[sp.type]:]
+        return Span(sp.start, sp.end, sp.type, f"{sp.masked[:-1]} ****{tail}]") if tail else sp
     if sp.type not in TAIL_SPANS:
         return sp
     value = text[sp.start:sp.end]

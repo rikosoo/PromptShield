@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { Dialog } from "@/components/Dialog";
 import { useSession } from "@/components/session";
 import { Empty, ErrorBox, Loading, Panel } from "@/components/ui";
 import { api, send, useLoad } from "@/lib/api";
@@ -16,6 +17,8 @@ export default function KeywordsPage() {
   const [wholeWord, setWholeWord] = useState(false);
   const [fuzzy, setFuzzy] = useState(true);
   const [note, setNote] = useState("");
+  const [edit, setEdit] = useState<{ row: KeywordRow; term: string; score: string; fuzzy: boolean; whole: boolean; note: string } | null>(null);
+  const [editErr, setEditErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -33,6 +36,18 @@ export default function KeywordsPage() {
       "Palavra cadastrada. Vale para os próximos prompts.");
   };
   const toggle = (r: KeywordRow) => void run(() => send("PUT", `v1/keywords/${r.id}`, body({ ...r, enabled: !r.enabled })), r.enabled ? "Palavra desligada." : "Palavra ligada.");
+  const openEdit = (r: KeywordRow) => { setEditErr(null); setEdit({ row: r, term: r.term, score: r.score === null ? "" : String(r.score), fuzzy: r.fuzzy, whole: r.whole_word, note: r.note ?? "" }); };
+  async function saveEdit(ev: FormEvent) {
+    ev.preventDefault();
+    if (!edit) return;
+    const n = edit.score.trim() === "" ? null : Number(edit.score);
+    if (n !== null && (!Number.isInteger(n) || n < 0 || n > 100)) { setEditErr("A pontuação deve ser um número inteiro de 0 a 100, ou ficar vazia."); return; }
+    setBusy(true);
+    try {
+      await send("PUT", `v1/keywords/${edit.row.id}`, body({ term: edit.term, whole_word: edit.whole, fuzzy: edit.fuzzy, score: n, enabled: edit.row.enabled, note: edit.note.trim() || null }));
+      setEdit(null); setMsg({ ok: true, text: "Palavra atualizada. Vale para os próximos prompts." }); rows.reload();
+    } catch (e) { setEditErr(e instanceof Error ? e.message : "Falhou."); } finally { setBusy(false); }
+  }
   const remove = (r: KeywordRow) => { if (confirm(`Remover a palavra «${r.term}»? Os alertas já gerados continuam.`)) void run(() => send("DELETE", `v1/keywords/${r.id}`), "Palavra removida."); };
 
   return (
@@ -75,6 +90,7 @@ export default function KeywordsPage() {
                   <td>{r.enabled ? "ligada" : "desligada"}</td>
                   <td>{whenFull(r.created_at)}</td>
                   <td className="space-x-2 text-right">{isAdmin && (<>
+                    <button type="button" className="btn" disabled={busy} onClick={() => openEdit(r)} aria-label={`Editar ${r.term}`}>Editar</button>
                     <button type="button" className="btn" disabled={busy} onClick={() => toggle(r)} aria-label={`${r.enabled ? "Desligar" : "Ligar"} ${r.term}`}>{r.enabled ? "Desligar" : "Ligar"}</button>
                     <button type="button" className="btn" disabled={busy} onClick={() => remove(r)} aria-label={`Remover ${r.term}`}>Remover</button>
                   </>)}</td>
@@ -84,6 +100,19 @@ export default function KeywordsPage() {
           </table>
         )}
       </Panel>
+    <Dialog open={!!edit} onClose={() => setEdit(null)} title="Editar palavra">
+        {edit && (
+          <form onSubmit={saveEdit} className="space-y-3 text-sm" aria-label="Editar palavra">
+            <div><label htmlFor="eterm" className="block text-xs text-muted">Palavra ou expressão</label><input id="eterm" className="field w-full" required minLength={2} maxLength={100} value={edit.term} onChange={(e) => setEdit({ ...edit, term: e.target.value })} /></div>
+            <div><label htmlFor="escore" className="block text-xs text-muted">Pontuação (0 a 100; vazio = calculada pelo algoritmo)</label><input id="escore" className="field w-full" inputMode="numeric" value={edit.score} onChange={(e) => setEdit({ ...edit, score: e.target.value })} /></div>
+            <div><label htmlFor="enote" className="block text-xs text-muted">Por que (opcional)</label><input id="enote" className="field w-full" maxLength={300} value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></div>
+            <label className="block"><input type="checkbox" checked={edit.fuzzy} onChange={(e) => setEdit({ ...edit, fuzzy: e.target.checked })} /> Aceitar palavras parecidas</label>
+            <label className="block"><input type="checkbox" checked={edit.whole} onChange={(e) => setEdit({ ...edit, whole: e.target.checked })} /> Só a palavra inteira</label>
+            {editErr && <p role="alert" className="rounded border border-crit bg-crit-bg px-3 py-2 text-crit">{editErr}</p>}
+            <div className="flex justify-end gap-2"><button type="button" className="btn" onClick={() => setEdit(null)}>Cancelar</button><button type="submit" className="btn-primary" disabled={busy || edit.term.trim().length < 2}>Salvar</button></div>
+          </form>
+        )}
+      </Dialog>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 Dois modos por palavra:
 - exata: o termo aparece no texto (ignora maiúsculas e acentos); `whole_word` exige a palavra inteira;
 - aproximada (`fuzzy`): além da exata, aceita palavras PARECIDAS, medidas por distância de edição (erro de digitação, letra a mais ou a
-  menos, letras trocadas, plural). A tolerância cresce com o tamanho da palavra, para não casar palavras curtas por acaso.
+  menos, letras trocadas, plural), inclusive o termo parecido DENTRO de outra palavra. A tolerância cresce com o tamanho da palavra, para não casar palavras curtas por acaso.
 Limite honesto: é semelhança de LETRAS, não de sentido. "carro" não casa com "automóvel"; e palavras curtas e parecidas podem casar sem querer
 (ex.: "fenix" e "felix"): por isso o modo aproximado se desliga por palavra.
 """
@@ -35,8 +35,8 @@ class Hit:
 
 
 def tolerance(n: int) -> int:
-    """Quantas edições aceitar numa palavra de `n` letras: até 4 letras, nenhuma; 5 a 8, uma; 9 ou mais, duas."""
-    return 0 if n <= 4 else 1 if n <= 8 else 2
+    """Quantas edições aceitar numa palavra de `n` letras: até 4 letras, nenhuma; 5 a 7, uma; 8 a 11, duas; 12 ou mais, três."""
+    return 0 if n <= 4 else 1 if n <= 7 else 2 if n <= 11 else 3
 
 
 def distance(a: str, b: str, limit: int) -> int:
@@ -56,6 +56,57 @@ def distance(a: str, b: str, limit: int) -> int:
             return limit + 1
         prev2, prev = prev, cur
     return prev[-1]
+
+
+def inside(word: str, term: str, k: int) -> bool:
+    """O `term` aparece DENTRO de `word` com até `k` edições? (Sellers: o termo pode começar e terminar em qualquer ponto da palavra.)"""
+    m = len(term)
+    if len(word) + k < m:
+        return False
+    col = list(range(m + 1))
+    col2: list[int] | None = None
+    prev_c = ""
+    for c in word:
+        new = [0] + [0] * m
+        for i in range(1, m + 1):
+            new[i] = min(col[i] + 1, new[i - 1] + 1, col[i - 1] + (0 if term[i - 1] == c else 1))
+            if col2 is not None and i > 1 and term[i - 1] == prev_c and term[i - 2] == c:
+                new[i] = min(new[i], col2[i - 2] + 1)
+        if new[m] <= k:
+            return True
+        col2, col, prev_c = col, new, c
+    return col[m] <= k
+
+
+def _bigrams(w: str) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for i in range(len(w) - 1):
+        out[w[i:i + 2]] = out.get(w[i:i + 2], 0) + 1
+    return out
+
+
+MAX_FUZZY_WORDS = 5000      # palavras DISTINTAS examinadas por prompt (texto gigante não trava a ingestão)
+
+
+def _near_single(uniq: list[str], grams: dict[str, dict[str, int]], term: str, whole_word: bool = False) -> bool:
+    """Uma palavra só: algum trecho de alguma palavra do texto se parece com o termo (cobre erro de digitação e o termo dentro de outra palavra)."""
+    k = tolerance(len(term))
+    if k == 0:
+        return False
+    if whole_word:                       # "só a palavra inteira": a palavra do texto TODA tem de ser parecida com o termo
+        return any(distance(w, term, k) <= k for w in uniq)
+    tb = _bigrams(term)
+    need = (len(term) - 1) - 2 * k              # cada edição destrói no máximo 2 pares de letras vizinhas: abaixo disso nem tenta
+    for w in uniq:
+        if len(w) + k < len(term):
+            continue
+        if need > 0:
+            wb = grams.setdefault(w, _bigrams(w))
+            if sum(min(n, tb[g]) for g, n in wb.items() if g in tb) < need:
+                continue
+        if inside(w, term, k):
+            return True
+    return False
 
 
 def _words(s: str) -> list[str]:
@@ -83,6 +134,8 @@ def find_hits(text: str, rules: list[Rule]) -> list[Hit]:
         return []
     norm = normalize(text)
     words = _words(norm)
+    uniq = list(dict.fromkeys(words))[:MAX_FUZZY_WORDS]
+    grams: dict[str, dict[str, int]] = {}
     out: list[Hit] = []
     for r in rules:
         t = normalize(r.term).strip()
@@ -90,7 +143,7 @@ def find_hits(text: str, rules: list[Rule]) -> list[Hit]:
             continue
         if _exact(norm, t, r.whole_word):
             out.append(Hit(r, False))
-        elif r.fuzzy and (tw := _words(t)) and _close(words, tw):
+        elif r.fuzzy and (tw := _words(t)) and (_near_single(uniq, grams, tw[0], r.whole_word) if len(tw) == 1 else _close(words, tw)):
             out.append(Hit(r, True))
     return out
 

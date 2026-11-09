@@ -99,10 +99,11 @@ def test_distance_and_tolerance():
     assert distance("brocolis", "brocoli", 2) == 1 and distance("fenix", "fnei", 3) == 2
     assert distance("fenix", "fneix", 2) == 1                       # letras vizinhas trocadas contam como UMA edição
     assert distance("abc", "abcdefgh", 2) == 3                      # passou do limite: corta
-    assert [tolerance(n) for n in (3, 4, 5, 8, 9, 15)] == [0, 0, 1, 1, 2, 2]
+    assert [tolerance(n) for n in (3, 4, 5, 7, 8, 11, 12, 15)] == [0, 0, 1, 1, 2, 2, 3, 3]
 
 
-@pytest.mark.parametrize("text", ["comprei brocoli hoje", "BRÓCOLIS!", "brocollis", "brocoils no jantar", "brocolos"])
+@pytest.mark.parametrize("text", ["comprei brocoli hoje", "BRÓCOLIS!", "brocollis", "brocoils no jantar", "brocolos", "brocules", "brocoles",
+                                  "superbrocolis", "brocolisxyz", "meubrocolinhos"])
 def test_fuzzy_catches_typos_plurals_and_swaps(text):
     hits = find_hits(text, [Rule("1", "brocolis", fuzzy=True)])
     assert len(hits) == 1
@@ -119,7 +120,7 @@ def test_fuzzy_off_by_default_and_when_the_rule_says_so():
     assert find("tem brocoli", [Rule("1", "brocolis", fuzzy=False)]) == []
 
 
-@pytest.mark.parametrize("text", ["comprei couve hoje", "brasil", "os bolsistas", "cpf", "casa"])
+@pytest.mark.parametrize("text", ["comprei couve hoje", "brasil", "os bolsistas", "cpf", "casa", "bronquite", "o procurador", "brasileiro", "rubricas"])
 def test_fuzzy_does_not_match_unrelated_words(text):
     assert find(text, [Rule("1", "brocolis", fuzzy=True)]) == []
 
@@ -159,3 +160,19 @@ def test_api_default_is_fuzzy_and_alert_says_similar_word(client, world):
     off = client.put(f"/v1/keywords/{k['id']}", json={"term": "brocolis", "fuzzy": False}, headers=world.user("admin"))
     assert off.status_code == 200 and off.json()["fuzzy"] is False
     assert _send(client, world, "comprei brocoli (simulado)")["incident_id"] is None
+
+
+def test_fuzzy_inside_longer_words_and_new_tolerance():
+    assert find("o perperito me pegou", [Rule("1", "perpe", fuzzy=True)])        # exato dentro da palavra
+    assert find("ontem fique perpes feliz", [Rule("1", "perpe", fuzzy=True)])
+    assert find("a perpa de ontem", [Rule("1", "perpe", fuzzy=True)])              # 1 letra diferente (5 letras: tolera 1)
+    assert find("brocules", [Rule("1", "brocolis", fuzzy=True)])                    # 2 letras diferentes (8 letras: tolera 2)
+    assert not find("brocalex", [Rule("1", "brocolis", fuzzy=True)])                # 3 edições: fora
+
+
+def test_fuzzy_caps_distinct_words_and_stays_fast_on_huge_text():
+    import time
+    words = " ".join(f"palavra{i}x" for i in range(20000))
+    t0 = time.perf_counter()
+    find(words, [Rule(str(i), f"termo{i}teste", fuzzy=True) for i in range(40)])
+    assert time.perf_counter() - t0 < 5.0

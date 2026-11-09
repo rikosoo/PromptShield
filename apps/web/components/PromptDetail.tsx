@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Dialog } from "@/components/Dialog";
 import { Attachments } from "@/components/Attachments";
 import { FeedbackForm } from "@/components/FeedbackForm";
+import { OriginalViewer } from "@/components/OriginalViewer";
 import { MaskedText, SeverityTag } from "@/components/ui";
 import { api, useLoad } from "@/lib/api";
 import { whenFull } from "@/lib/format";
@@ -37,6 +38,7 @@ export function PromptDetailDialog({ row: incoming, onClose, onSession, onPerson
               {(row.attachments ?? []).length > 0 && <div><h3 className="mb-1 text-xs font-semibold uppercase text-muted">Arquivos anexados</h3><Attachments row={row} />
                 <p className="mt-1 text-xs text-muted">Só o nome, o tamanho e o tipo são coletados; o conteúdo do arquivo não. O nome sugere o risco, não prova o que há dentro.</p></div>}
               <div><h3 className="mb-1 text-xs font-semibold uppercase text-muted">Prompt (mascarado)</h3><div className="rounded border border-line bg-panel2 p-2"><MaskedText text={row.masked_text} block /></div></div>
+              <OriginalViewer eventId={row.event_id} hasOriginal={row.has_original} />
               <div><h3 className="mb-1 text-xs font-semibold uppercase text-muted">Motivos do score</h3>
                 <ul className="space-y-1 font-mono text-xs">{row.reasons.map((r, i) => <li key={i}>+{r.contribution} · {r.rule}</li>)}{!row.reasons.length && <li>sem motivos de risco</li>}</ul></div>
               {a && (
