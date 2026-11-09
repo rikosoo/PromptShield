@@ -51,7 +51,7 @@ EXPECTED: dict[tuple[str, str], object] = {
     # grupos, exceções e lista de domínios permitidos: leitura para todos os papéis, escrita só do administrador
     ("GET", "/v1/groups"): ALL, ("GET", "/v1/groups/{group_id}"): ALL, ("GET", "/v1/exceptions"): ALL, ("GET", "/v1/allowlist"): ALL,
     ("POST", "/v1/groups"): ADMIN, ("PATCH", "/v1/groups/{group_id}"): ADMIN, ("DELETE", "/v1/groups/{group_id}"): ADMIN,
-    ("POST", "/v1/groups/{group_id}/members"): ADMIN, ("DELETE", "/v1/groups/{group_id}/members/{user_id}"): ADMIN,
+    ("POST", "/v1/groups/{group_id}/members"): ADMIN, ("POST", "/v1/groups/{group_id}/members/remove"): ADMIN, ("DELETE", "/v1/groups/{group_id}/members/{user_id}"): ADMIN,
     ("POST", "/v1/policies/{policy_id}/exceptions"): ADMIN, ("POST", "/v1/exceptions/{exception_id}/revoke"): ADMIN,
     ("POST", "/v1/allowlist"): ADMIN, ("DELETE", "/v1/allowlist/{entry_id}"): ADMIN,
     # palavras-chave monitoradas: leitura para todos os papéis, escrita só do administrador

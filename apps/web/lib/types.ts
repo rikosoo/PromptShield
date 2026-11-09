@@ -136,7 +136,7 @@ export interface DeviceRow {
 export interface DevicesOut { devices: DeviceRow[]; active: number; coverage: Record<string, number>; ias_coverage?: Record<string, number>; license: License }
 
 export interface SignalsOut { span_types: Record<string, number>; intents: Record<string, number>; kinds: Record<string, number>; tools: Record<string, number> }
-export interface PersonRow { user_id: string; department: string | null; events: number; high_risk: number; max_risk: number; avg_risk: number; last_seen: string }
+export interface PersonRow { user_id: string; department: string | null; groups?: string[]; events: number; high_risk: number; max_risk: number; avg_risk: number; last_seen: string }
 
 export interface UserGroup { id: string; name: string; description: string | null; members: number; created_at: string }
 export interface UserGroupDetail extends UserGroup { member_ids: string[] }

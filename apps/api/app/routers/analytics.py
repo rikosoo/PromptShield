@@ -139,14 +139,16 @@ def risk_stats(p: Annotated[Principal, Depends(require_roles(*READ_ROLES))], day
         return user_risk(s, start, datetime.now(timezone.utc).date(), top=50)
 
 
-@router.get("/people", summary="Pessoas que usaram IA: volume, risco e última atividade (para filtrar prompts por pessoa)")
+@router.get("/people", summary="Pessoas que usaram IA: volume, risco, grupos e última atividade (para filtrar prompts por pessoa e montar grupos)")
 def people(
     p: Annotated[Principal, Depends(require_roles(*READ_ROLES))],
     q: Annotated[str | None, Query(min_length=1, max_length=100, description="parte do nome/e-mail")] = None,
+    mode: Annotated[str, Query(pattern="^(contains|prefix)$", description="contains: o texto aparece em qualquer parte; prefix: o identificador COMEÇA com o texto")] = "contains",
     days: Annotated[int, Query(ge=1, le=365)] = 30,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 50,
 ) -> list[dict]:
-    like = None if not q else "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    esc = None if not q else q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    like = None if esc is None else (esc + "%" if mode == "prefix" else "%" + esc + "%")
     with tenant_session(p.tenant_id) as s:
         rows = s.execute(text("""
             SELECT e.user_id, max(e.department) AS department, count(*) AS events,
@@ -157,4 +159,10 @@ def people(
             WHERE e.occurred_at >= :since AND (CAST(:like AS text) IS NULL OR e.user_id ILIKE CAST(:like AS text) ESCAPE '\\')
             GROUP BY e.user_id ORDER BY 4 DESC, 3 DESC, 1 LIMIT :lim"""),
             {"hi": HIGH, "since": window_start(days), "like": like, "lim": limit}).mappings().all()
-    return [{**r, "last_seen": r["last_seen"].isoformat()} for r in rows]
+        ids = [r["user_id"] for r in rows]
+        by_user: dict[str, list[str]] = {}
+        if ids:
+            for uid, gname in s.execute(text("""SELECT m.user_id, g.name FROM user_group_members m JOIN user_groups g ON g.id = m.group_id
+                                                WHERE m.user_id = ANY(:ids) ORDER BY g.name"""), {"ids": ids}):
+                by_user.setdefault(uid, []).append(gname)
+    return [{**r, "last_seen": r["last_seen"].isoformat(), "groups": by_user.get(r["user_id"], [])} for r in rows]

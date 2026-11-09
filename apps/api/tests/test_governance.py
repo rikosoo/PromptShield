@@ -181,3 +181,35 @@ def test_subject_erase_removes_group_membership_and_user_exceptions(client, worl
     assert r.json()["group_memberships_deleted"] == 1 and r.json()["exceptions_deleted"] == 1
     assert client.get(f"/v1/groups/{gid}", headers=adm).json()["member_ids"] == ["u-43"]
     assert client.get("/v1/exceptions", headers=adm).json() == []
+
+
+# ---------------------------------------------------------------- pessoas: "começa com" e grupos (aba Usuários e seletor de grupos)
+def test_people_prefix_mode_and_groups(client, world):
+    for u in ("DTC-ana", "DTC-bia", "dtc-caio", "XDTC-dani", "eva"):
+        post(client, world, "SIMULADO: resuma a ata (texto comum)", user=u)
+    adm = world.user("admin")
+    names = lambda r: sorted(x["user_id"] for x in r.json())   # noqa: E731
+    contains = client.get("/v1/people?q=DTC", headers=adm)
+    prefix = client.get("/v1/people?q=DTC-&mode=prefix", headers=adm)
+    assert names(contains) == ["DTC-ana", "DTC-bia", "XDTC-dani", "dtc-caio"]
+    assert names(prefix) == ["DTC-ana", "DTC-bia", "dtc-caio"]                  # começa com, sem diferenciar maiúscula; XDTC fica de fora
+    g = client.post("/v1/groups", json={"name": "dtc"}, headers=adm).json()
+    client.post(f"/v1/groups/{g['id']}/members", json={"user_ids": ["DTC-ana"]}, headers=adm)
+    rows = {x["user_id"]: x for x in client.get("/v1/people?q=DTC-&mode=prefix", headers=adm).json()}
+    assert rows["DTC-ana"]["groups"] == ["dtc"] and rows["DTC-bia"]["groups"] == []
+    assert client.get("/v1/people?mode=qualquer", headers=adm).status_code == 422
+    assert client.get("/v1/people?limit=1000", headers=adm).status_code == 200 and client.get("/v1/people?limit=1001", headers=adm).status_code == 422
+    assert client.get("/v1/people?q=%25", headers=adm).json() == []             # % e _ são texto, não curinga
+
+
+def test_remove_members_by_body_works_for_emails_and_is_admin_only_and_audited(client, world):
+    adm = world.user("admin")
+    g = client.post("/v1/groups", json={"name": "emails"}, headers=adm).json()
+    ids = ["rafael.moreira@empresa-exemplo.com.br", "ana@x.example", "bia@x.example"]
+    client.post(f"/v1/groups/{g['id']}/members", json={"user_ids": ids}, headers=adm)
+    url = f"/v1/groups/{g['id']}/members/remove"
+    assert client.post(url, json={"user_ids": ids[:1]}, headers=world.user("analista")).status_code == 403
+    r = client.post(url, json={"user_ids": [ids[0], "ninguem@x.example"]}, headers=adm)
+    assert r.status_code == 200 and r.json() == {"removed": 1, "not_members": 1}
+    assert sorted(client.get(f"/v1/groups/{g['id']}", headers=adm).json()["member_ids"]) == ids[1:]
+    assert world.sql("SELECT count(*) FROM audit_log WHERE action = 'group.members_remove'").scalar() == 1

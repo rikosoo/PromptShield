@@ -16,8 +16,9 @@ test("grupos, exceções e domínios permitidos: administrador cria, API confirm
   await page.getByLabel("Nome do grupo").fill(group);
   await page.getByRole("button", { name: "Criar grupo" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Grupo criado" })).toBeVisible();
+  await page.getByText("Adicionar digitando os identificadores").click();      // fica numa seção recolhida; o caminho principal é o seletor
   await page.getByLabel(/Identificadores/).fill("ana.sintetica\nbia.sintetica, ana.sintetica");
-  await page.getByRole("button", { name: "Adicionar" }).click();
+  await page.getByRole("button", { name: "Adicionar", exact: true }).click();
   await expect(page.getByTestId("members").getByText("bia.sintetica")).toBeVisible();
   const groups = (await apiGet<Group[]>(page, "v1/groups")).data;
   expect(groups.find((g) => g.name === group)?.members).toBe(2);               // o repetido não conta duas vezes

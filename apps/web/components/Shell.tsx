@@ -11,7 +11,7 @@ import { SessionProvider, useSession } from "./session";
 const NAV_GROUPS = [
   { title: "Visão geral", items: [{ href: "/", label: "Visão geral" }, { href: "/prompts", label: "Análise de prompts" }, { href: "/reports", label: "Relatórios" }] },
   { title: "Incidentes", items: [{ href: "/incidents", label: "Incidentes" }, { href: "/alerts", label: "Alertas e SIEM" }, { href: "/history", label: "Todos os prompts" }, { href: "/quality", label: "Qualidade da detecção" }] },
-  { title: "Usuários e grupos", items: [{ href: "/risk", label: "Risco por usuário" }, { href: "/groups", label: "Grupos" }] },
+  { title: "Usuários e grupos", items: [{ href: "/users", label: "Usuários" }, { href: "/risk", label: "Risco por usuário" }, { href: "/groups", label: "Grupos" }] },
   { title: "Políticas", items: [{ href: "/policies", label: "Políticas" }, { href: "/exceptions", label: "Exceções" }, { href: "/allowlist", label: "Domínios permitidos" }, { href: "/keywords", label: "Palavras-chave" }] },
   { title: "Administração", items: [{ href: "/sensors", label: "Sensores" }, { href: "/devices", label: "Dispositivos" }, { href: "/license", label: "Licença" }, { href: "/privacy", label: "Privacidade e segurança" }, { href: "/inference-hooks", label: "Inference hooks" }, { href: "/pilot", label: "Piloto" }] },
 ];
@@ -33,8 +33,30 @@ function ThemeToggle() {
   return <button type="button" className="btn" onClick={toggle} aria-pressed={dark}>Tema escuro</button>;
 }
 
+const NAV_KEY = "ps-nav-closed";
+
+/** Seções do menu que o usuário recolheu (guardado só neste navegador; sem armazenamento, tudo aberto). */
+function useClosedSections(keepOpen?: string): [string[], (title: string) => void] {
+  const [closed, setClosed] = useState<string[]>([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem(NAV_KEY) ?? "[]"); if (Array.isArray(v)) setClosed(v.filter((x): x is string => typeof x === "string" && x !== keepOpen)); } catch { /* sem armazenamento: tudo aberto */ }
+  }, []);
+  const toggle = (title: string) => setClosed((c) => {
+    const next = c.includes(title) ? c.filter((x) => x !== title) : [...c, title];
+    try { localStorage.setItem(NAV_KEY, JSON.stringify(next)); } catch { /* ok */ }
+    return next;
+  });
+  return [closed, toggle];
+}
+
 function Frame({ children }: { children: ReactNode }) {
   const path = usePathname();
+  const activeTitle = NAV_GROUPS.find((g) => g.items.some((n) => (n.href === "/" ? path === "/" : path.startsWith(n.href))))?.title;
+  const [closed, toggleSection] = useClosedSections(activeTitle);
+  // ao ir para uma página, a seção dela reabre (só na troca de página: recolher depois continua funcionando)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (activeTitle && closed.includes(activeTitle)) toggleSection(activeTitle); }, [path]);
   const { me, tenant, license } = useSession();
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", headers: { "X-Requested-With": "promptshield" } });
@@ -46,22 +68,28 @@ function Frame({ children }: { children: ReactNode }) {
       <nav aria-label="Principal" className="bg-nav px-3 py-3 text-nav-fg lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:py-4">
         <div className="mb-2 px-2 text-base font-bold text-white lg:mb-4">PromptShield</div>
         <div className="flex flex-wrap gap-x-4 lg:block">
-          {NAV_GROUPS.map((g) => (
-            <div key={g.title} className="lg:mb-3">
-              <div className="hidden px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-nav-fg lg:block">{g.title}</div>
-              <ul className="flex flex-wrap gap-1 lg:flex-col">
-                {g.items.map((n) => {
-                  const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
-                  return (
-                    <li key={n.href}>
-                      <Link href={n.href} aria-current={active ? "page" : undefined}
-                        className={`block rounded-md px-3 py-1.5 text-sm hover:bg-nav-act hover:text-white ${active ? "bg-nav-act font-semibold text-white" : ""}`}>{n.label}</Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+          {NAV_GROUPS.map((g, gi) => {
+            const open = !closed.includes(g.title);
+            return (
+              <div key={g.title} className="lg:mb-2">
+                <button type="button" onClick={() => toggleSection(g.title)} aria-expanded={open} aria-controls={`nav-sec-${gi}`}
+                  className="hidden w-full items-center justify-between rounded px-3 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-nav-fg hover:text-white lg:flex">
+                  <span>{g.title}</span><span aria-hidden="true" className="font-mono">{open ? "−" : "+"}</span>
+                </button>
+                <ul id={`nav-sec-${gi}`} className={`flex-wrap gap-1 lg:flex-col ${open ? "flex" : "flex lg:hidden"}`}>
+                  {g.items.map((n) => {
+                    const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
+                    return (
+                      <li key={n.href}>
+                        <Link href={n.href} aria-current={active ? "page" : undefined}
+                          className={`block rounded-md px-3 py-1.5 text-sm hover:bg-nav-act hover:text-white ${active ? "bg-nav-act font-semibold text-white" : ""}`}>{n.label}</Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       </nav>
       <div className="min-w-0">

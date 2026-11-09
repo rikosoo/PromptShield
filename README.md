@@ -36,7 +36,7 @@ sensor na máquina → evento universal → motor de detecção → política �
 
 ## O que o console mostra
 
-O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuários e grupos**, **Políticas** e **Administração**. Em **Usuários e grupos**: *Risco por usuário* e *Grupos*. Em **Políticas**: *Exceções*, *Domínios permitidos* e *Palavras-chave*.
+O menu é agrupado em cinco áreas: **Visão geral**, **Incidentes**, **Usuários e grupos**, **Políticas** e **Administração**. Em **Usuários e grupos**: *Usuários* (procurar uma pessoa e ver todos os prompts dela), *Risco por usuário* e *Grupos* (escolher pessoas na lista, inclusive todas que começam com um texto). As seções do menu expandem e recolhem. Em **Políticas**: *Exceções*, *Domínios permitidos* e *Palavras-chave*.
 
 | Tela | Para quê |
 |---|---|

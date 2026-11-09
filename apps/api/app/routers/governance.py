@@ -168,6 +168,15 @@ def remove_member(group_id: uuid.UUID, user_id: str, p: Admin) -> Response:
     return Response(status_code=204)
 
 
+@router.post("/groups/{group_id}/members/remove", summary="Tira várias pessoas do grupo (os identificadores vão no corpo: e-mails têm @ e pontos, que o proxy do console não aceita no caminho)")
+def remove_members(group_id: uuid.UUID, body: MembersIn, p: Admin) -> dict:
+    with tenant_session(p.tenant_id) as s:
+        g = _group(s, group_id)
+        n = s.execute(delete(UserGroupMember).where(UserGroupMember.group_id == g.id, UserGroupMember.user_id.in_(body.user_ids))).rowcount
+        audit.write(s, p, "group.members_remove", "group", str(g.id), {"name": g.name, "requested": body.user_ids, "removed": n})
+        return {"removed": n, "not_members": len(body.user_ids) - n}
+
+
 # ---------------------------------------------------------------- exceções
 
 class ExceptionIn(BaseModel):
