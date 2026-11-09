@@ -15,7 +15,8 @@ test("contrato suspenso: aviso em toda tela, leitura funciona e alteração é r
   await page.goto("/devices");
   await page.getByLabel("Nome (ex.: piloto TI)").fill("não deve criar");
   await page.getByRole("button", { name: "Criar token" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "contrato suspenso" })).toBeVisible();
+  // a faixa do topo também é role=alert e também diz "contrato suspenso": filtrar pela mensagem de RECUSA (com os dois-pontos) evita pegar as duas
+  await expect(page.getByRole("alert").filter({ hasText: "contrato suspenso: a coleta e as alterações estão paradas" })).toBeVisible();
 });
 
 test("empresa ativa não vê aviso de contrato", async ({ page }) => {
