@@ -306,19 +306,19 @@ def test_release_notice_is_signed_binds_the_package_and_rejects_forgeries(vendor
     with pytest.raises(ReleaseError):
         verify_notice(".".join([forged[0], base64.urlsafe_b64encode(body).decode().rstrip("="), forged[2]]), vendor.public_key())    # mexer no aviso invalida
     # o aviso é assinado, mas cita a assinatura de OUTRO pacote: recusado
-    bad = issue_notice(vendor, kind="app", version="0.4.0", sha256="b" * 64, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="x.zip")
+    bad = issue_notice(vendor, kind="app", version="0.4.0", sha256="b" * 64, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="promptshield-onprem-0.4.0.zip")
     with pytest.raises(ReleaseError, match="pacote"):
         verify_notice(bad, vendor.public_key())
     # separação de domínio: assinatura de pacote da APLICAÇÃO não vale como a de REGRAS
-    as_rules = issue_notice(vendor, kind="rules", version="0.4.0", sha256=sha, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="r.pack")
+    as_rules = issue_notice(vendor, kind="rules", version="0.4.0", sha256=sha, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="promptshield-rules-0.4.0.pack")
     with pytest.raises(ReleaseError):
         verify_notice(as_rules, vendor.public_key())
     for kw in ({"kind": "tudo"}, {"sha256": "xyz"}, {"size": 0}, {"version": "lixo"}):
-        args = dict(kind="app", version="0.4.0", sha256=sha, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="x.zip")
+        args = dict(kind="app", version="0.4.0", sha256=sha, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="promptshield-onprem-0.4.0.zip")
         args.update(kw)
         with pytest.raises(ReleaseError):
             issue_notice(vendor, **args)
-    assert verify_notice(issue_notice(vendor, kind="app", version="0.4.0", sha256=sha, size=1, security=False, notes="n" * 5000, published_at=T0, package_signature=sig, file="x.zip"),
+    assert verify_notice(issue_notice(vendor, kind="app", version="0.4.0", sha256=sha, size=1, security=False, notes="n" * 5000, published_at=T0, package_signature=sig, file="promptshield-onprem-0.4.0.zip"),
                          vendor.public_key()).notes == "n" * 1000                       # notas limitadas
 
 
@@ -339,3 +339,13 @@ def test_rulepack_envelope_is_signed_and_tampering_is_detected(vendor):
             verify_rulepack(junk, vendor.public_key())
     with pytest.raises(ReleaseError):
         sign_rulepack(vendor, {"x": "a" * (3 * 1024 * 1024)})
+
+
+@pytest.mark.parametrize("name", ["../x.zip", "/etc/passwd", "promptshield-onprem-0.4.0.zip/../../x", "promptshield-onprem-..zip", "a/b.zip", "x.zip", "promptshield-onprem-1.0.0.exe", "promptshield-onprem-1.0.0.zip\n"])
+def test_a_signed_notice_cannot_carry_a_path_outside_the_updates_folder(vendor, name):
+    from promptshield_licensing import ReleaseError, issue_notice, sign_package, verify_notice
+    sha = "a" * 64
+    sig = sign_package(vendor, "0.4.0", sha)
+    tok = issue_notice(vendor, kind="app", version="0.4.0", sha256=sha, size=1, security=False, notes="", published_at=T0, package_signature=sig, file=name)
+    with pytest.raises(ReleaseError, match="nome de arquivo"):
+        verify_notice(tok, vendor.public_key())

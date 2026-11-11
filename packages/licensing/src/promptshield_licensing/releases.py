@@ -26,6 +26,9 @@ SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 MAX_NOTES = 1000
 
 
+FILE_RE = re.compile(r"^promptshield-(?:onprem|rules)-[0-9A-Za-z][0-9A-Za-z.-]{0,60}\.(?:zip|pack)$")
+
+
 class ReleaseError(Exception):
     pass
 
@@ -90,6 +93,8 @@ def verify_notice(token: str, pub: Ed25519PublicKey) -> ReleaseNotice:
         parse_version(version)
         if not SHA_RE.match(sha) or size <= 0:
             raise ReleaseError("SHA-256 ou tamanho inválido")
+        if not FILE_RE.fullmatch(str(claims["file"])):                 # vira caminho no disco do cliente: nada de barra, "..", caminho absoluto ou nome estranho
+            raise ReleaseError("nome de arquivo inválido")
         n = ReleaseNotice(kind, version, sha, size, bool(claims["security"]), str(claims.get("notes", ""))[:MAX_NOTES],
                           datetime.strptime(claims["published_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc), str(claims["package_signature"]), str(claims["file"]))
     except (KeyError, TypeError, ValueError) as exc:

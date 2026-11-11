@@ -44,3 +44,14 @@ Regras para quando existir o LLM local (ainda não construído):
 - `max_text_chars` aceita 2 milhões de caracteres por evento; com as correções leva segundos, mas ainda é alto.
 - Seletores das IAs na web (ChatGPT, Claude, Gemini, Copilot) podem mudar e deixar de capturar sem aviso.
 - Falta pentest independente e revisão jurídica.
+
+## Revisão de 2026-11-11 (painel do fornecedor, avisos de versão, pacotes de regras, atualização assistida)
+
+Por leitura de código e ferramentas automáticas; **não é pentest**. Classificação ainda pela lista de 2021: não consegui abrir owasp.org nesta sessão (sem acesso de rede ao domínio), então **a edição mais nova continua A VERIFICAR**.
+
+- **Segredos no repositório:** busca por padrões de chave/token no código e no histórico: só achados SINTÉTICOS (chaves de exemplo nos testes e no `demo.py`, rotuladas como simuladas). Nenhuma chave privada real, nenhum `.env` versionado.
+- **pip-audit:** nenhuma vulnerabilidade conhecida nas dependências de terceiros. **npm audit (produção):** 0.
+- **Achado corrigido (A01/A08, integridade e caminho de arquivo):** o nome do arquivo dentro do aviso assinado virava caminho no disco do cliente sem validação. Um aviso mal formado (ou emitido com chave do fornecedor comprometida) poderia apontar para fora de `updates/`. Agora só vale `promptshield-(onprem|rules)-<versão>.(zip|pack)`; teste com `../`, caminho absoluto, subpasta, extensão errada e quebra de linha.
+- **Já coberto pelo desenho (testado):** download só com aprovação do administrador, conferindo tamanho, SHA-256 e assinatura; arquivo recusado é apagado; `atualizar.sh` valida versão, nome, caminho e SHA-256 antes de tocar em arquivos, faz backup antes e recusa voltar de versão; a API do cliente nunca fala com o Docker; pacote de regras é só dado (regex restrita), assinado em domínio separado, reconferido a cada carga; rotas de atualização só para administrador e na auditoria.
+- **Limites que continuam:** `re` do Python não tem tempo limite (mitigado por checagem estática + orçamento de tempo, protege contra erro, não contra fornecedor malicioso); `assert` usado para estreitar tipos em alguns módulos (`S101`; some com `python -O`, sem efeito de segurança hoje); `shell=True` em `doctor.py` roda só o comando do próprio hook da pessoa, no diagnóstico local; falsos positivos `S105` no motor (nomes de campos, não senhas).
+- **LGPD/GDPR:** este trabalho não coleta dado pessoal novo: avisos de versão e o estado de atualização não têm conteúdo de usuário, e o fornecedor só recebe o que a licença já recebia (ver `docs/lgpd.md`; os textos jurídicos continuam MODELOS a serem revisados por advogado, e esta revisão não é parecer jurídico).
