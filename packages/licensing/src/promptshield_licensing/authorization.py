@@ -52,6 +52,11 @@ class Authorization:
     auth_expires: datetime
     serial: int
     renew_after_hours: int
+    # Falta de validação (decidida pelo fornecedor, vai ASSINADA na autorização). Contam a partir do momento em que a validação seguinte
+    # deveria ter acontecido (`issued_at` + `renew_after_hours`): depois de `warn_after_days` o CLIENTE é avisado; depois de `suspend_after_days`
+    # a inspeção para (consulta e exportação continuam) e volta sozinha na próxima validação bem-sucedida. None = regra desligada.
+    warn_after_days: int | None = None
+    suspend_after_days: int | None = None
 
     @property
     def tolerance_end(self) -> datetime:
@@ -64,14 +69,25 @@ class Authorization:
         return {"v": 1, "typ": "authorization", "product": PRODUCT, **d}
 
 
+def check_silence_rule(warn: int | None, suspend: int | None) -> None:
+    """Coerência dos prazos de falta de validação (1 a 365 dias; o aviso vem antes da suspensão)."""
+    for name, v in (("aviso", warn), ("suspensão", suspend)):
+        if v is not None and not (isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 365):
+            raise AuthorizationError(f"prazo de {name} inválido: use um número inteiro de dias entre 1 e 365")
+    if warn is not None and suspend is not None and warn >= suspend:
+        raise AuthorizationError("o aviso ao cliente precisa vir ANTES da suspensão")
+
+
 def issue_authorization(key: Ed25519PrivateKey, *, license_id: str, installation_id: str, customer: str, max_devices: int,
                         contract_start: datetime, contract_end: datetime, tolerance_days: int, status: Status, on_end: OnEnd,
-                        serial: int, now: datetime, validity: timedelta, renew_after_hours: int = 24) -> tuple[str, Authorization]:
+                        serial: int, now: datetime, validity: timedelta, renew_after_hours: int = 24,
+                        warn_after_days: int | None = None, suspend_after_days: int | None = None) -> tuple[str, Authorization]:
     """Assina uma autorização. Ativa: a validade é cortada no fim do contrato + tolerância. Encerrada: só informa (validade curta)."""
     if contract_end <= contract_start:
         raise AuthorizationError("o fim do contrato precisa ser depois do início")
     if tolerance_days < 0 or max_devices < 0:
         raise AuthorizationError("tolerância e limite de máquinas não podem ser negativos")
+    check_silence_rule(warn_after_days, suspend_after_days)
     expires = now + validity
     if status == "active":
         expires = min(expires, contract_end + timedelta(days=tolerance_days))
@@ -79,7 +95,8 @@ def issue_authorization(key: Ed25519PrivateKey, *, license_id: str, installation
             raise AuthorizationError("o contrato já passou do fim da tolerância: não se emite autorização ativa")
     auth = Authorization(license_id=license_id, installation_id=installation_id, customer=customer, max_devices=max_devices,
                          contract_start=contract_start, contract_end=contract_end, tolerance_days=tolerance_days, status=status, on_end=on_end,
-                         issued_at=now, not_before=now, auth_expires=expires, serial=serial, renew_after_hours=renew_after_hours)
+                         issued_at=now, not_before=now, auth_expires=expires, serial=serial, renew_after_hours=renew_after_hours,
+                         warn_after_days=warn_after_days, suspend_after_days=suspend_after_days)
     payload = json.dumps(auth.to_claims(), sort_keys=True, separators=(",", ":")).encode()
     return sign_blob(key, PREFIX, payload), auth
 
@@ -101,11 +118,13 @@ def verify_authorization(token: str, pub: Ed25519PublicKey, installation_id: str
             max_devices=int(claims["max_devices"]), contract_start=_parse(claims["contract_start"]), contract_end=_parse(claims["contract_end"]),
             tolerance_days=int(claims["tolerance_days"]), status=claims["status"], on_end=claims["on_end"], issued_at=_parse(claims["issued_at"]),
             not_before=_parse(claims["not_before"]), auth_expires=_parse(claims["auth_expires"]), serial=int(claims["serial"]),
-            renew_after_hours=int(claims["renew_after_hours"]))
+            renew_after_hours=int(claims["renew_after_hours"]), warn_after_days=claims.get("warn_after_days"),
+            suspend_after_days=claims.get("suspend_after_days"))
     except (KeyError, TypeError, ValueError) as exc:
         raise AuthorizationError("campos faltando ou inválidos") from exc
     if a.status not in ("active", "closed") or a.on_end not in ("stop_inspection", "keep_inspection"):
         raise AuthorizationError("status ou política de término inválidos")
+    check_silence_rule(a.warn_after_days, a.suspend_after_days)
     if a.installation_id != installation_id:
         raise AuthorizationError("a autorização é de outra instalação")
     if a.not_before > now + skew:

@@ -10,7 +10,7 @@ export interface Tenant {
   policy_url: string | null; monitored_domains: string[]; contract?: Contract; monitoring_mode?: "passive" | "legacy_enforcement"; is_demo: boolean; volume_threshold_per_hour: number; original_retention_days: number; omit_text_categories: string[];
 }
 export interface Contract { suspended: boolean; suspended_at: string | null; suspended_reason: string | null; license_expires_at: string | null; days_to_expiry: number | null; expired: boolean }
-export type LicenseStateId = "nao_ativado" | "ativo" | "sem_contato" | "em_tolerancia" | "expirado" | "encerrado";
+export type LicenseStateId = "nao_ativado" | "ativo" | "sem_contato" | "em_tolerancia" | "expirado" | "encerrado" | "suspenso";
 export interface LicenseStatus {
   mode: "off" | "onprem"; state: LicenseStateId; message: string; can_enroll: boolean; inspecting: boolean;
   deadline?: string | null; days_left?: number | null; max_devices?: number | null; installation_id?: string | null; server_configured?: boolean;

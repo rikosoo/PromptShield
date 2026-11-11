@@ -3,7 +3,7 @@ import type { LicenseStateId, LicenseStatus } from "./types";
 export interface LicenseNotice { level: "crit" | "warn"; title: string; text: string; href: string }
 
 export const STATE_LABEL: Record<LicenseStateId, string> = {
-  nao_ativado: "Não ativado", ativo: "Ativo", sem_contato: "Sem contato com o licenciamento", em_tolerancia: "Em tolerância", expirado: "Expirado", encerrado: "Encerrado",
+  nao_ativado: "Não ativado", ativo: "Ativo", sem_contato: "Sem contato com o licenciamento", em_tolerancia: "Em tolerância", expirado: "Expirado", encerrado: "Encerrado", suspenso: "Suspenso",
 };
 
 /** O que cada estado permite, em palavras que o administrador entende (espelha packages/licensing/states.py; nada apaga dados). */
@@ -14,6 +14,7 @@ export const STATE_EFFECT: Record<LicenseStateId, string> = {
   em_tolerancia: "Tudo funciona. O contrato venceu e há um prazo para regularizar.",
   expirado: "Novas máquinas não podem ser matriculadas. A inspeção, a consulta e a exportação continuam.",
   encerrado: "Novas máquinas não podem ser matriculadas. A inspeção segue o que o contrato prevê; consulta e exportação continuam.",
+  suspenso: "Faltou a validação com o fornecedor por muito tempo: a inspeção está parada e alterações estão bloqueadas. Consulta e exportação continuam. Volta sozinha na próxima validação bem-sucedida.",
 };
 
 export const RENEWAL_WARNING_DAYS = 30;
@@ -39,6 +40,7 @@ export function licenseNotice(s: LicenseStatus | undefined | null, now: Date = n
     case "sem_contato": return { level: "warn", title: "Sem contato com o licenciamento", text: s.message, href };
     case "em_tolerancia": return { level: "warn", title: "Contrato vencido, em tolerância", text: s.message, href };
     case "expirado": return { level: "crit", title: "Licença expirada", text: s.message, href };
+    case "suspenso": return { level: "crit", title: "Licença suspensa: inspeção parada", text: s.message, href };
     case "encerrado": return { level: "crit", title: s.inspecting ? "Contrato encerrado" : "Contrato encerrado: inspeção parada", text: s.message, href };
   }
 }

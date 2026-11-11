@@ -21,6 +21,7 @@ const CASES = [
   { state: "sem_contato", inspecting: true, can_enroll: true, title: "Sem contato com o licenciamento", message: "Sem contato com o serviço de licenças. A autorização local vale por mais 4 dia(s).", stopped: false },
   { state: "em_tolerancia", inspecting: true, can_enroll: true, title: "Contrato vencido, em tolerância", message: "Contrato vencido em 10/01/2027. Em tolerância por mais 9 dia(s).", stopped: false },
   { state: "expirado", inspecting: true, can_enroll: false, title: "Licença expirada", message: "Licença expirada. Novas máquinas não podem ser matriculadas.", stopped: false },
+  { state: "suspenso", inspecting: false, can_enroll: false, title: "Licença suspensa: inspeção parada", message: "Licença SUSPENSA: faltou a validação com o fornecedor por mais de 21 dias. A inspeção está PARADA.", stopped: true },
   { state: "encerrado", inspecting: false, can_enroll: false, title: "Contrato encerrado: inspeção parada", message: "Contrato encerrado: a inspeção está PARADA conforme o contrato.", stopped: true },
 ];
 

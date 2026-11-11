@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, Uuid, func
+from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -45,6 +45,10 @@ class Contract(Base):
     on_end: Mapped[str] = mapped_column(String(20), default="stop_inspection")
     auth_validity_days: Mapped[int] = mapped_column(Integer, default=7)
     renew_after_hours: Mapped[int] = mapped_column(Integer, default=24)
+    # falta de validação (nulo = regra desligada): avisa o CLIENTE depois de `warn_after_days` e suspende a inspeção depois de `suspend_after_days`,
+    # contados do momento em que a validação seguinte era esperada; a contagem do FORNECEDOR (alerta interno) começa antes, no painel
+    warn_after_days: Mapped[int | None] = mapped_column(Integer)
+    suspend_after_days: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(12), default="pendente")
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -95,6 +99,22 @@ class IssuedAuthorization(Base):
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     auth_expires: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     token_sha256: Mapped[str] = mapped_column(String(64))
+
+
+class Admin(Base):
+    """Quem entra no painel do fornecedor (senha + código de 6 dígitos do aplicativo autenticador). O segredo do código é guardado cifrado."""
+
+    __tablename__ = "lic_admins"
+    id: Mapped[uuid.UUID] = _pk()
+    email: Mapped[str] = mapped_column(String(320))
+    password_hash: Mapped[str] = mapped_column(Text)
+    totp_secret_enc: Mapped[str | None] = mapped_column(Text)           # nulo: esta conta não exige o código (só desenvolvimento)
+    password_version: Mapped[int] = mapped_column(Integer, default=1)    # sobe ao trocar a senha e derruba as sessões abertas
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = _ts()
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Nonce(Base):

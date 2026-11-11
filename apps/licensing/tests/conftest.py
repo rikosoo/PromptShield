@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, text
 
 APP_DIR = Path(__file__).resolve().parents[1]
 ADMIN_URL = os.environ.get("DATABASE_URL_TEST")
-TABLES = "lic_nonces, lic_authorizations, lic_installations, lic_activation_codes, lic_contracts, lic_customers, lic_audit"
+TABLES = "lic_admins, lic_nonces, lic_authorizations, lic_installations, lic_activation_codes, lic_contracts, lic_customers, lic_audit"
 
 
 def pytest_collection_modifyitems(config, items):

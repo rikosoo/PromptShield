@@ -30,6 +30,7 @@ describe("licenseNotice", () => {
     expect(lvl("expirado")).toBe("crit");
     expect(lvl("nao_ativado", false)).toBe("crit");
     expect(lvl("encerrado")).toBe("crit");
+    expect(lvl("suspenso")).toBe("crit");
     expect(licenseNotice({ ...base, state: "expirado" })?.href).toBe("/license");
   });
   it("encerrado diz com todas as letras quando a inspeção parou", () => {

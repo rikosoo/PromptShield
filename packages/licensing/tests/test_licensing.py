@@ -193,3 +193,69 @@ def test_closed_contract_applies_the_contracted_policy(vendor, inst):
 def test_closed_wins_over_every_other_state(vendor, inst):
     _, closed = issue(vendor, inst, status="closed")
     assert evaluate(closed, T0 + timedelta(days=900), last_attempt_failed=True).state == State.ENCERRADO
+
+
+# ---------- falta de validação: aviso ao cliente (10 dias) e suspensão (21 dias) ----------
+WEEK = dict(renew_after_hours=168, warn_after_days=10, suspend_after_days=21, validity=timedelta(days=28))
+
+
+def weekly(vendor, inst, now, issued=T0, **over):
+    _, auth = issue(vendor, inst, now=issued, **{**WEEK, **over})
+    return evaluate(auth, now)
+
+
+def test_silence_timeline_vendor_sees_it_first_then_the_customer_then_suspension(vendor, inst):
+    due = T0 + timedelta(days=7)                       # aqui a validação seguinte deveria ter acontecido
+    assert weekly(vendor, inst, T0 + timedelta(days=6)).state == State.ATIVO
+    first_miss = weekly(vendor, inst, due + timedelta(hours=1))
+    assert first_miss.state == State.ATIVO and "ativa" in first_miss.message             # o cliente NÃO é avisado ainda (quem vê é o fornecedor)
+    assert weekly(vendor, inst, due + timedelta(days=9, hours=23)).state == State.ATIVO
+    warn = weekly(vendor, inst, due + timedelta(days=10))
+    assert (warn.state, warn.can_enroll, warn.inspecting) == (State.SEM_CONTATO, True, True) and warn.days_left == 11
+    assert "há 10 dia(s)" in warn.message and "suspensa em 11 dia(s)" in warn.message
+    assert weekly(vendor, inst, due + timedelta(days=20, hours=23)).state == State.SEM_CONTATO
+    stop = weekly(vendor, inst, due + timedelta(days=21))
+    assert (stop.state, stop.can_enroll, stop.inspecting) == (State.SUSPENSO, False, False) and "PARADA" in stop.message and "Volta sozinha" in stop.message
+    assert weekly(vendor, inst, due + timedelta(days=60)).state == State.SUSPENSO      # nada o "expira" para um estado mais brando
+
+
+def test_a_successful_validation_heals_the_suspension_by_itself(vendor, inst):
+    now = T0 + timedelta(days=40)
+    assert weekly(vendor, inst, now).state == State.SUSPENSO
+    healed = weekly(vendor, inst, now, issued=now)                                         # a autorização nova traz `issued_at` novo
+    assert healed.state == State.ATIVO and healed.inspecting and healed.can_enroll
+
+
+def test_closed_still_wins_and_old_authorizations_keep_the_old_rule(vendor, inst):
+    _, closed = issue(vendor, inst, status="closed", **WEEK)
+    assert evaluate(closed, T0 + timedelta(days=90)).state == State.ENCERRADO
+    _, old = issue(vendor, inst)                                                           # sem os campos novos: regra antiga (1,5 período, 7 dias)
+    assert old.warn_after_days is None and old.suspend_after_days is None
+    assert evaluate(old, T0 + timedelta(days=3), last_success=T0, last_attempt_failed=True).state == State.SEM_CONTATO
+    assert evaluate(old, T0 + timedelta(days=30), last_attempt_failed=True).state == State.EXPIRADO      # e a inspeção continua (não é suspensão)
+
+
+def test_contract_end_rules_are_untouched_by_the_silence_rule(vendor, inst):
+    late = END + timedelta(days=2)
+    _, a = issue(vendor, inst, now=late - timedelta(hours=1), **WEEK)
+    assert evaluate(a, late).state == State.EM_TOLERANCIA                                  # contrato vencido, validando em dia
+    _, b = issue(vendor, inst, now=END - timedelta(days=1), **WEEK)
+    assert evaluate(b, END + timedelta(days=17)).state in (State.EXPIRADO, State.SUSPENSO)
+
+
+def test_silence_days_are_signed_and_validated(vendor, inst):
+    token, auth = issue(vendor, inst, **WEEK)
+    ok = verify_authorization(token, vendor.public_key(), inst.installation_id, T0)
+    assert (ok.warn_after_days, ok.suspend_after_days) == (10, 21)
+    forged = token.replace(token.split(".")[1], token.split(".")[1][:-4] + "AAAA")      # mexer no conteúdo invalida a assinatura
+    with pytest.raises(AuthorizationError):
+        verify_authorization(forged, vendor.public_key(), inst.installation_id, T0)
+    for bad in ({"warn_after_days": 21, "suspend_after_days": 21}, {"warn_after_days": 30, "suspend_after_days": 10},
+                {"warn_after_days": 0}, {"suspend_after_days": 400}, {"warn_after_days": True}):
+        with pytest.raises(AuthorizationError):
+            issue(vendor, inst, **{**WEEK, **bad})
+    only_warn, _ = issue(vendor, inst, renew_after_hours=168, warn_after_days=10, validity=timedelta(days=28))      # só aviso, sem suspensão
+    a = verify_authorization(only_warn, vendor.public_key(), inst.installation_id, T0)
+    assert evaluate(a, T0 + timedelta(days=20)).state == State.SEM_CONTATO and evaluate(a, T0 + timedelta(days=20)).days_left is None
+    expired = evaluate(a, T0 + timedelta(days=60))                                                 # sem suspensão configurada: vale a regra antiga (expirado, inspeção continua)
+    assert expired.state == State.EXPIRADO and expired.inspecting
