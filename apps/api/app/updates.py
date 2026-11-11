@@ -114,6 +114,8 @@ def _row_view(r: UpdateState) -> dict[str, Any]:
 def summary() -> dict[str, Any]:
     with anonymous_session() as s:
         rows = {r.kind: _row_view(r) for r in s.execute(select(UpdateState)).scalars()}
+    if rows.get("app") and not is_newer(rows["app"]["version"], settings.version):
+        rows.pop("app")                                                # já instalada (o atualizar.sh trocou a versão): o aviso some sem esperar a próxima validação
     return {"app": {"installed": settings.version, "notice": rows.get("app"), "ready_path": str(ready_file()) if (rows.get("app") or {}).get("status") == "ready" else None},
             "rules": {"installed": rulepacks.installed_version(), "live": rulepacks.live_version(), "notice": rows.get("rules")}}
 
@@ -131,7 +133,7 @@ def ready_info() -> dict[str, Any] | None:
     """Para o `atualizar.sh`: arquivo pronto, versão e o SHA-256 que o servidor conferiu."""
     with anonymous_session() as s:
         r = s.get(UpdateState, "app")
-        if r is None or r.status != "ready" or not (updates_dir() / r.file).is_file():
+        if r is None or r.status != "ready" or not is_newer(r.version, settings.version) or not (updates_dir() / r.file).is_file():
             return None
         return {"version": r.version, "file": r.file, "sha256": r.sha256, "size": int(r.size), "path": str(updates_dir() / r.file)}
 

@@ -33,6 +33,7 @@ services:
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
       CONSOLE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
       # licenciamento on-premise (docs/licenciamento.md); off = nada muda
+      VERSION: ${PS_VERSION:-0.3.0}                          # só o pacote do cliente fixa a versão
       LICENSE_MODE: ${LICENSE_MODE:-off}
       LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-}
       LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
@@ -64,6 +65,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-promptshield@localhost}
+      VERSION: ${PS_VERSION:-0.3.0}                          # só o pacote do cliente fixa a versão
       LICENSE_MODE: ${LICENSE_MODE:-off}
       LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-}
       LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}

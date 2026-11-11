@@ -146,3 +146,7 @@ O painel web do fornecedor passou a existir em 2026-11-11 (`docs/painel-forneced
 
 
 Aviso **por e-mail** (30/15/7 dias antes e no vencimento; a faixa no console nos últimos 30 dias do contrato já existe), cobrança e nota fiscal, assinatura do instalador/executável, vários tenants com um limite de máquinas **compartilhado**, rotação da chave do fornecedor (a instalação fixa uma chave; trocar exigiria aceitar duas), modo totalmente offline (sem nenhuma renovação, com arquivo de licença levado por pendrive), e a revisão jurídica do contrato.
+
+
+## Avisos de versão e atualização
+A resposta da validação semanal também carrega avisos assinados de versão da aplicação e de pacote de regras. Fluxo, formato e limites em [`pacotes-de-regras.md`](pacotes-de-regras.md).

@@ -31,11 +31,10 @@ from urllib.parse import urlparse
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 TEMPLATES = HERE / "templates"
-VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)?$")
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)         # zip reproduzível
 SOURCE_DIRS = ("packages", "apps/api", "apps/web", "apps/extension")
 SOURCE_EXCLUDE = {"tests", "node_modules", ".next", "__pycache__", ".pytest_cache", "test-results", ".venv", "dist", "playwright-report", ".ruff_cache", "tsconfig.tsbuildinfo"}
-EXECUTABLE = {"instalar.sh", "backup.sh"}
+EXECUTABLE = {"instalar.sh", "backup.sh", "atualizar.sh"}
 
 
 class BuildError(Exception):
@@ -98,9 +97,12 @@ def _zip(stage: Path, dest: Path, top: str) -> None:
 def build(version: str, license_url: str, out: Path, *, signing_key: str, with_images: bool = False, with_source: bool | None = None,
           docker: str = "docker", root: Path = ROOT, allow_http: bool = False) -> dict[str, str]:
     from promptshield_licensing import fingerprint, load_private_key, public_key_b64, sha256_file, sign_package
+    from promptshield_licensing.releases import ReleaseError, parse_version
 
-    if not VERSION_RE.match(version):
-        raise BuildError(f"versão inválida: {version!r} (use algo como 0.4.0)")
+    try:
+        parse_version(version)                                  # a MESMA regra que o fornecedor e o cliente usam para comparar versões
+    except ReleaseError:
+        raise BuildError(f"versão inválida: {version!r} (use algo como 0.4.0)") from None
     u = urlparse(license_url)
     if not u.hostname or u.scheme not in ("https", "http") or (u.scheme == "http" and not allow_http):
         raise BuildError("a URL do serviço de licenças precisa ser https (http só com --allow-http, para teste)")
@@ -119,7 +121,7 @@ def build(version: str, license_url: str, out: Path, *, signing_key: str, with_i
     with tempfile.TemporaryDirectory(prefix="ps-pkg-") as tmp:
         stage = Path(tmp) / top
         stage.mkdir()
-        for name in ("docker-compose.yml", "env.example", "instalar.sh", "instalar.ps1", "backup.sh", "LEIA-ME.md"):
+        for name in ("docker-compose.yml", "env.example", "instalar.sh", "instalar.ps1", "backup.sh", "atualizar.sh", "LEIA-ME.md"):
             (stage / name).write_text(render((TEMPLATES / name).read_text(encoding="utf-8"), values), encoding="utf-8", newline="\n")
         (stage / "VERSION").write_text(version + "\n")
         (stage / "licenca").mkdir()

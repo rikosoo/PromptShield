@@ -60,7 +60,7 @@ Página `/history` do console. Usa `GET /v1/events` (filtros: `user_q`, `q`, `ap
 
 ## Licenciamento on-premise
 
-Serviço separado do fornecedor (`apps/licensing`, banco próprio, tabelas `lic_*`) + biblioteca pura (`packages/licensing`) + cliente dentro da API (`app/license_client.py`, tabela `license_state`, rotas `/v1/license/*`, renovação no worker). O estado da licença é uma função pura sobre a autorização assinada guardada; a API aplica o resultado em um único ponto (`security.current_principal` para inspeção e escrita, `license.check_new_seat` para matrícula). Ver [`licenciamento.md`](licenciamento.md).
+Serviço separado do fornecedor (`apps/licensing`, banco próprio, tabelas `lic_*`) + biblioteca pura (`packages/licensing`) + cliente dentro da API (`app/license_client.py`, tabela `license_state`, rotas `/v1/license/*`, renovação no worker). O estado da licença é uma função pura sobre a autorização assinada guardada; a API aplica o resultado em um único ponto (`security.current_principal` para inspeção e escrita, `license.check_new_seat` para matrícula). Ver [`licenciamento.md`](licenciamento.md). Sobre a mesma validação semanal viajam os avisos assinados de versão; o cliente os guarda (`app/updates.py`, tabela `update_state`), baixa só com aprovação do administrador e aplica pacotes de regras (`app/rulepacks.py`, motor em `packages/detection/.../rulepack.py`) em sombra antes de valerem. Ver [`pacotes-de-regras.md`](pacotes-de-regras.md).
 
 
 ## Grupos, exceções e domínios permitidos

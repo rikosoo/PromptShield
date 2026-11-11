@@ -1,4 +1,4 @@
-.PHONY: up down test lint setup ner test-e2e test-e2e-web audit release
+.PHONY: up down test lint setup ner test-e2e test-e2e-web audit release rulepack
 
 PY ?= python3
 
@@ -57,3 +57,7 @@ audit: .venv apps/web/node_modules apps/extension/node_modules ## varredura de d
 release: ## pacote do cliente assinado: make release VERSION=0.4.0 LICENSE_URL=https://licencas.seudominio.com.br  (exige LICENSE_SIGNING_KEY e Docker)
 	@test -n "$(VERSION)" -a -n "$(LICENSE_URL)" || (echo "use: make release VERSION=0.4.0 LICENSE_URL=https://..." && exit 2)
 	.venv/bin/python infra/release/build_package.py --version "$(VERSION)" --license-url "$(LICENSE_URL)" --with-images
+
+rulepack: ## pacote de regras assinado: make rulepack SOURCE=infra/release/rulepacks/exemplo.json VERSION=2026.11.1  (exige LICENSE_SIGNING_KEY)
+	@test -n "$(SOURCE)" -a -n "$(VERSION)" || (echo "use: make rulepack SOURCE=arquivo.json VERSION=2026.11.1" && exit 2)
+	.venv/bin/python infra/release/build_rulepack.py --source "$(SOURCE)" --version "$(VERSION)"

@@ -87,7 +87,22 @@ Rode `bash backup.sh` (Linux/macOS). Ele grava na pasta `backups/`: o **banco**,
 
 ## 8. Atualizar para uma versão nova
 
-O fornecedor envia um pacote novo. **Antes de qualquer atualização, rode o backup.** Depois: descompacte o pacote novo numa pasta ao lado da antiga, copie para ela o `.env` e o arquivo `.instalado` da pasta antiga, e rode o instalador (`bash instalar.sh`). Ele mantém o `.env`, carrega as imagens novas e atualiza o banco sozinho. Os dados e a licença ficam preservados. *(Este procedimento ainda não foi validado em campo: por isso o backup antes.)*
+**Nada é instalado sozinho.** A cada validação semanal da licença o fornecedor pode avisar que há versão nova. O caminho é este:
+
+1. No console, em **Administração > Atualizações** (só o administrador), aparece a versão, as notas e se é correção de segurança. Clique em **Aprovar o download**. O servidor baixa o arquivo do fornecedor e confere a assinatura e o SHA-256; ele **não instala nada**.
+2. Quando o status ficar **Pronta para instalar**, entre no servidor, na pasta do PromptShield, e rode:
+
+```bash
+bash atualizar.sh
+```
+
+O script confere de novo o arquivo e o conteúdo, **faz o backup antes**, guarda os arquivos atuais em `anterior/<versão>/`, troca os arquivos do pacote (o `.env`, os dados e a licença **não** são tocados), sobe a versão nova (o banco é atualizado sozinho na partida) e confere que a API informa a versão nova. Ele recusa voltar para uma versão menor.
+
+**Se algo der errado:** o script para e diz onde. Os arquivos antigos estão em `anterior/<versão>/` e o backup em `backups/`. Não apague nada e fale com o fornecedor: voltar atrás depois que o banco foi atualizado exige restaurar o backup, e isso deve ser feito com acompanhamento.
+
+**Pacotes de regras** (novas detecções) são outra coisa: não exigem reinstalar nada. Eles chegam do mesmo jeito, ficam **guardados sem efeito**, e você os põe em **sombra** (só registra o que casaria, sem mudar nenhum resultado), olha os números e então **promove a ativo**. Dá para desativar a qualquer momento: volta ao padrão de fábrica na hora.
+
+*(Estes procedimentos foram provados com um Docker simulado nos testes e ainda não foram validados em campo, nem no Windows: por isso o backup antes e o acompanhamento do fornecedor na primeira atualização.)*
 
 ## 9. Problemas comuns
 

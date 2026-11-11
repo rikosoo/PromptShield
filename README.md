@@ -32,7 +32,7 @@ sensor na máquina → evento universal → motor de detecção → política �
 
    O instalador pergunta quais IAs monitorar, por números (1 ChatGPT web, 2 Copilot web, 3 Gemini web, 4 Claude web, 5 Claude Code CLI, 6 Codex CLI, 7 GitHub Copilot CLI). Estado de cada uma: [`docs/guia-ias.md`](docs/guia-ias.md). Windows: [`docs/teste-windows.md`](docs/teste-windows.md).
 4. **Extensão do navegador:** um clique seu, uma vez (`chrome://extensions` → Carregar sem compactação → `~/.promptshield/extension`).
-5. **Atualizar o servidor:** `git pull` e `docker compose up -d --build` (as migrações rodam sozinhas ao subir). Faça backup antes ([`docs/operacao.md`](docs/operacao.md)); nunca use `docker compose down -v`.
+5. **Atualizar o servidor:** em instalação com o pacote do cliente, aprove o download em Administração > Atualizações e rode `bash atualizar.sh` ([`docs/pacotes-de-regras.md`](docs/pacotes-de-regras.md)). Em desenvolvimento: `git pull` e `docker compose up -d --build` (as migrações rodam sozinhas ao subir). Faça backup antes ([`docs/operacao.md`](docs/operacao.md)); nunca use `docker compose down -v`.
 
 ## O que o console mostra
 

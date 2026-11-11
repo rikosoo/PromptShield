@@ -159,7 +159,7 @@ def test_readme_is_step_by_step_and_states_the_real_rules(tmp_path):
     assert "10 dias" in txt and "21 dias" in txt and "toda semana" in txt and "se desfaz sozinha" in txt
     assert "Nunca" in txt and "down -v" in txt and "apaga o banco" in txt                  # o aviso sobre apagar dados está lá
     assert re.search(r"Nunca[^|]*enviados prompts", txt) or "**Nunca** são enviados prompts" in txt
-    assert "{{" not in txt and "ainda não foi validado em campo" in txt                    # honestidade: o que não foi testado em campo
+    assert "{{" not in txt and "ainda não foram validados em campo" in txt                    # honestidade: o que não foi testado em campo
 
 
 # ---------------------------------------------------------------- scripts
@@ -279,3 +279,116 @@ def test_images_mode_bundles_images_and_the_installer_loads_them(tmp_path):
     assert f"save promptshield/api:{V} promptshield/web:{V} postgres:16" in build_log        # as três imagens num arquivo só
     r = run_installer(d, bin_dir, tmp_path)
     assert r.returncode == 0 and f"docker load -i imagens/promptshield-{V}.tar.gz" in (tmp_path / "docker.log").read_text()
+
+
+# ---------------------------------------------------------------- atualizar.sh (Docker FALSO: prova a lógica do script, não o Docker real)
+STUB_DOCKER_UPDATE = """#!/usr/bin/env bash
+echo "docker $*" >> "$STUB_LOG"
+case "$*" in
+  "info"*|"compose version") exit 0;;
+  *update-ready*) [ -n "${STUB_READY:-}" ] && { printf '%s' "$STUB_READY"; exit 0; }; exit 1;;
+  "compose cp "*) cp "$STUB_ZIP" "${@: -1}"; exit 0;;
+  *pg_dump*) echo "dump-sintetico"; exit 0;;
+  *"tar czf"*) echo "licenca-sintetica"; exit 0;;
+  "compose up"*|load*) exit 0;;
+esac
+exit 0
+"""
+
+
+def update_setup(tmp_path, new_version="0.5.0"):
+    d, bin_dir = installed_dir(tmp_path)
+    (bin_dir / "docker").write_text(STUB_DOCKER_UPDATE)
+    (bin_dir / "curl").write_text('#!/usr/bin/env bash\nprintf \'{"version":"%s"}\' "${STUB_VERSION:-0.4.0}"\n')
+    assert run_installer(d, bin_dir, tmp_path).returncode == 0
+    new = bp.build(new_version, URL, tmp_path / "pkg2", signing_key=KEY_B64, root=ROOT, with_source=False)
+    sha = hashlib.sha256(Path(new["zip"]).read_bytes()).hexdigest()
+    name = Path(new["zip"]).name
+    ready = json.dumps({"version": new_version, "file": name, "sha256": sha, "size": 1, "path": f"/var/lib/promptshield/updates/{name}"})
+    return d, bin_dir, new, ready
+
+
+def run_update(d, bin_dir, tmp_path, zip_path, ready, **env):
+    (tmp_path / "docker.log").write_text("")
+    e = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "STUB_LOG": str(tmp_path / "docker.log"), "STUB_ZIP": str(zip_path), "STUB_READY": ready, **env}
+    return subprocess.run(["bash", "atualizar.sh"], cwd=d, env=e, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=90)
+
+
+def test_update_script_swaps_files_keeps_secrets_and_data_and_checks_the_new_version(tmp_path):
+    d, bin_dir, new, ready = update_setup(tmp_path)
+    env_before = (d / ".env").read_text()
+    r = run_update(d, bin_dir, tmp_path, new["zip"], ready, STUB_VERSION="0.5.0")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (d / "VERSION").read_text().strip() == "0.5.0" and "PS_VERSION=0.5.0" in (d / ".env").read_text()
+    assert (d / ".env").read_text().replace("PS_VERSION=0.5.0", "PS_VERSION=0.4.0") == env_before             # só a versão mudou: senhas e chaves intactas
+    assert (d / ".instalado").is_file() and (d / "anterior" / "0.4.0" / "VERSION").read_text().strip() == "0.4.0"
+    assert list((d / "backups").glob("banco-*.dump")) and not (d / "atualizacao").exists()
+    assert (d / "atualizar.sh").is_file() and "atualizado: 0.4.0 -> 0.5.0" in r.stdout
+    log = (tmp_path / "docker.log").read_text()
+    assert log.index("pg_dump") < log.index("compose up -d")                                                    # o backup vem ANTES de subir a versão nova
+    assert "down" not in log and "-v" not in log.replace("-it", "")                                           # nunca apaga volumes
+
+
+def test_update_script_refuses_when_nothing_is_ready_a_downgrade_a_wrong_hash_or_a_tampered_package(tmp_path):
+    d, bin_dir, new, ready = update_setup(tmp_path)
+    r = run_update(d, bin_dir, tmp_path, new["zip"], "")
+    assert r.returncode != 0 and "Não há atualização pronta" in r.stderr
+    old = json.loads(ready) | {"version": "0.3.0"}
+    r = run_update(d, bin_dir, tmp_path, new["zip"], json.dumps(old))
+    assert r.returncode != 0 and "não é maior" in r.stderr
+    bad = json.loads(ready) | {"sha256": "0" * 64}
+    r = run_update(d, bin_dir, tmp_path, new["zip"], json.dumps(bad))
+    assert r.returncode != 0 and "não confere" in r.stderr and (d / "VERSION").read_text().strip() == "0.4.0"
+    evil = json.loads(ready) | {"path": "/etc/passwd"}
+    assert "caminho inesperado" in run_update(d, bin_dir, tmp_path, new["zip"], json.dumps(evil)).stderr
+    evil = json.loads(ready) | {"file": "../x.zip"}
+    assert "nome de arquivo inesperado" in run_update(d, bin_dir, tmp_path, new["zip"], json.dumps(evil)).stderr
+    # pacote com um arquivo trocado depois de montado: o SHA256SUMS de dentro não fecha
+    tampered = tmp_path / "t.zip"
+    with zipfile.ZipFile(new["zip"]) as zin, zipfile.ZipFile(tampered, "w") as zout:
+        for i in zin.infolist():
+            data = zin.read(i.filename)
+            zout.writestr(i, data + b"\n# alterado" if i.filename.endswith("docker-compose.yml") else data)
+    ready2 = json.loads(ready) | {"sha256": hashlib.sha256(tampered.read_bytes()).hexdigest()}
+    r = run_update(d, bin_dir, tmp_path, tampered, json.dumps(ready2))
+    assert r.returncode != 0 and "SHA256SUMS" in r.stderr and (d / "VERSION").read_text().strip() == "0.4.0" and not list((d / "backups").glob("*")) if (d / "backups").exists() else True
+    assert not (d / "anterior").exists()                                                                          # parou ANTES de mexer em qualquer arquivo
+
+
+def test_update_script_reports_when_the_new_version_does_not_come_up(tmp_path):
+    d, bin_dir, new, ready = update_setup(tmp_path)
+    r = run_update(d, bin_dir, tmp_path, new["zip"], ready, STUB_VERSION="0.4.0")                                # a API continua informando a versão antiga
+    assert r.returncode != 0 and "não informa a versão 0.5.0" in r.stderr and "anterior/0.4.0" in r.stderr
+
+
+# ---------------------------------------------------------------- construtor de pacote de regras
+def load_rulepack_builder():
+    spec = importlib.util.spec_from_file_location("build_rulepack", ROOT / "infra" / "release" / "build_rulepack.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def test_rulepack_builder_validates_signs_and_the_vendor_accepts_the_result(tmp_path):
+    from promptshield_licensing import RULES_PRODUCT, load_private_key, verify_rulepack
+
+    rb = load_rulepack_builder()
+    res = rb.build(ROOT / "infra" / "release" / "rulepacks" / "exemplo.json", "2026.11.1", tmp_path, signing_key=KEY_B64)
+    pub = load_private_key(KEY_B64).public_key()
+    payload = verify_rulepack(Path(res["file"]).read_text(), pub)
+    assert payload["version"] == "2026.11.1" and len(payload["rules"]) == 2 and "_aviso" not in payload
+    m = json.loads((tmp_path / "promptshield-rules-2026.11.1.pack.manifest.json").read_text())
+    assert m["sha256"] == hashlib.sha256(Path(res["file"]).read_bytes()).hexdigest() and m["product"] == RULES_PRODUCT
+    assert verify_package(pub, m["version"], m["sha256"], m["signature"], RULES_PRODUCT)          # a assinatura do manifesto é do domínio das regras
+    assert not verify_package(pub, m["version"], m["sha256"], m["signature"])                     # e NÃO vale como pacote da aplicação
+
+
+def test_rulepack_builder_refuses_invalid_rules_and_missing_key(tmp_path):
+    rb = load_rulepack_builder()
+    bad = tmp_path / "ruim.json"
+    bad.write_text(json.dumps({"rules": [{"id": "r1x", "category": "nao_existe", "confidence": 0.9, "rule": "regra ruim", "kind": "regex", "pattern": "(a+)+b"}]}))
+    with pytest.raises(rb.BuildError, match="nada foi gerado"):
+        rb.build(bad, "2026.11.1", tmp_path / "o", signing_key=KEY_B64)
+    assert not (tmp_path / "o").exists()                                                          # nenhum arquivo é gerado
+    with pytest.raises(rb.BuildError, match="sem chave"):
+        rb.build(ROOT / "infra" / "release" / "rulepacks" / "exemplo.json", "2026.11.1", tmp_path / "o2", signing_key="")

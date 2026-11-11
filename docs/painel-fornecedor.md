@@ -106,4 +106,7 @@ Sem `--with-images` ele leva as fontes e o cliente constrói as imagens (precisa
 - **Disponibilidade do seu servidor** importa agora (a regra de 21 dias): monitore `/health`, faça backup do banco do serviço **e da chave de assinatura** (perder a chave = ninguém mais valida; trocá-la exige reemitir pacotes e ativações).
 - **Proxy corporativo** do cliente pode bloquear a saída para o seu domínio; o LEIA-ME diz o que liberar. Cliente sem internet **não** é atendido por este desenho (precisaria de licença por arquivo, ainda não existe).
 - Contrato, aviso legal sobre o envio periódico (o que é enviado está no LEIA-ME, seção 6) e prazos precisam de **revisão jurídica**.
-- Fora do escopo desta etapa (próximas, na ordem combinada): aviso de versão nova no console do cliente, **pacotes de regras assinados**, atualização assistida com aprovação do administrador do cliente, e-mail de aviso, cobrança.
+- Aviso de versão no console do cliente, pacotes de regras assinados e atualização assistida: construídos, ver [`pacotes-de-regras.md`](pacotes-de-regras.md). Publicar uma versão ou pacote no painel = Versões; o cliente só fica sabendo na próxima validação semanal.
+- Validade e limite de máquinas: editáveis no painel (contrato), valem na validação seguinte; o cliente limita NOVAS matrículas ao menor entre o limite da empresa e o da licença.
+- O .zip do cliente **não** traz o painel nem o serviço de licenças (conferido por teste).
+- Fora do escopo: e-mail de aviso, cobrança, limite de usuários do console (Colaboradores).

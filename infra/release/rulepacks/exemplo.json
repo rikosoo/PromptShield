@@ -1,0 +1,12 @@
+{
+  "_aviso": "EXEMPLO SIMULADO: regras inventadas para mostrar o formato. Não use em produção. Copie este arquivo e escreva as regras reais.",
+  "notes": "Pacote de exemplo (simulado).",
+  "min_engine": "2.0",
+  "weights": { "segredo": 90 },
+  "rules": [
+    { "id": "exemplo-token-interno", "category": "segredo", "confidence": 0.9, "rule": "Token interno do sistema X (exemplo simulado)",
+      "kind": "regex", "pattern": "\\bXTK-[A-Z0-9]{16}\\b", "span_type": "xtk", "masked": "XTK-****" },
+    { "id": "exemplo-projeto", "category": "estrategia_ma", "confidence": 0.8, "rule": "Menção ao projeto Fênix (exemplo simulado)",
+      "kind": "terms", "terms": ["projeto fenix"], "whole_word": true }
+  ]
+}
