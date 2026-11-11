@@ -162,6 +162,15 @@ class Nonce(Base):
     seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class RateHit(Base):
+    """Contador de pedidos por janela de 1 minuto, COMPARTILHADO entre processos. A chave é um SHA-256 (nunca o IP nem o e-mail em claro)."""
+
+    __tablename__ = "lic_rate_hits"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    win: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    n: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class AuditEntry(Base):
     """Só de inserção. `actor`: 'fornecedor' (CLI) ou o identificador da instalação."""
 

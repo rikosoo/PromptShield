@@ -78,6 +78,7 @@ def _configure(request):
     crypto.clear_cache()
     with admin_engine.begin() as c:
         c.execute(text("TRUNCATE tenants CASCADE"))
+        c.execute(text("TRUNCATE rate_hits"))
     yield
     settings.passive_only = True
     appdb.reset_engine()

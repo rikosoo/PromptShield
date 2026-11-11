@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
 from lic_service import packages, panel_auth, service
+from lic_service.clientip import client_ip
 from lic_service.config import settings
 from lic_service.db import session_scope
 from lic_service.models import ActivationCode, Admin, AuditEntry, Contract, Customer, Installation, IssuedAuthorization, Release
@@ -155,7 +156,7 @@ def login_form(request: Request) -> Response:
 def login(request: Request, email: str = Form(""), password: str = Form(""), code: str = Form("")) -> Response:
     _on()
     _same_origin(request)
-    ip = request.client.host if request.client else "?"
+    ip = client_ip(request)
     if panel_auth.too_many(f"ip:{ip}", 20) or panel_auth.too_many(f"mail:{email.strip().lower()}", 10) or panel_auth.too_many("all", 200):
         return _render(request, "login.html", None, 429, error="Muitas tentativas; aguarde um minuto.", totp_required=settings.panel_require_totp)
     now = service.utcnow()

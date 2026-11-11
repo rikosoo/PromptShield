@@ -9,11 +9,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from app import audit, metrics, passwords, ratelimit
+from app.clientip import client_ip
 from app.config import settings
 from app.db import anonymous_session, tenant_session
 from app.models import User
@@ -52,11 +53,12 @@ def _count(user_id: uuid.UUID, ok: bool) -> None:
 
 
 @router.post("/auth/login", summary="Entra com e-mail e senha (LOCAL_AUTH=true); devolve uma sessão assinada")
-def login(body: LoginIn) -> dict:
+def login(body: LoginIn, request: Request) -> dict:
     _enabled()
     email = body.email.strip().lower()
-    for key, limit in (("login:all", settings.login_global_per_minute), (f"login:{email}", settings.login_per_email_per_minute)):
-        wait = ratelimit.check(key, limit)
+    for key, limit in (("login:all", settings.login_global_per_minute), (f"login:ip:{client_ip(request)}", settings.login_per_ip_per_minute),
+                       (f"login:{email}", settings.login_per_email_per_minute)):
+        wait = ratelimit.check_shared(key, limit)
         if wait is not None:
             metrics.inc("ps_login_total", result="rate_limited")
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "muitas tentativas; aguarde um pouco", headers={"Retry-After": str(wait)})

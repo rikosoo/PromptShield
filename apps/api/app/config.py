@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     login_max_failures: int = 5                   # tentativas erradas seguidas até bloquear o acesso
     login_lock_minutes: int = 15
     login_per_email_per_minute: int = 10          # limite de tentativas por e-mail (o limite por IP é do proxy reverso)
+    login_per_ip_per_minute: int = 60             # por IP de origem (veja TRUSTED_PROXY_HOPS)
+    trusted_proxy_hops: int = 0                   # quantos proxies de confiança há à frente da API; 0 = ignora X-Forwarded-For (padrão seguro)
     login_global_per_minute: int = 300            # teto geral: cada tentativa gasta CPU (scrypt)
 
     # notificações (Etapa 7). Webhooks exigem https e destino público, salvo estas válvulas de desenvolvimento/teste.

@@ -12,7 +12,6 @@ import hmac
 import json
 import secrets
 import struct
-import threading
 import time
 import unicodedata
 from typing import Any
@@ -21,6 +20,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+from lic_service import ratelimit
 from lic_service.config import settings
 
 MIN_LENGTH, MAX_LENGTH = 12, 128
@@ -163,22 +163,10 @@ def read_session(cookie: str | None, now: float | None = None) -> dict[str, Any]
     return read_payload(cookie, b"session", now)
 
 
-# ---------------- limite de tentativas de entrada (em memória, por processo) ----------------
-_lock = threading.Lock()
-_hits: dict[str, list[float]] = {}
-
-
+# ---------------- limite de tentativas de entrada (compartilhado entre processos; veja ratelimit.py) ----------------
 def too_many(key: str, per_minute: int, now: float | None = None) -> bool:
-    now = time.monotonic() if now is None else now
-    with _lock:
-        recent = [t for t in _hits.get(key, []) if now - t < 60]
-        recent.append(now)
-        _hits[key] = recent
-        if len(_hits) > 10_000:
-            _hits.clear()
-        return len(recent) > per_minute
+    return ratelimit.count(f"panel:{key}", now) > per_minute
 
 
 def reset_limits() -> None:
-    with _lock:
-        _hits.clear()
+    ratelimit.reset()

@@ -60,7 +60,7 @@ def _require_mode() -> None:
 @router.post("/activate", summary="Informa o código de ativação do fornecedor (uso único). Vincula este servidor ao contrato")
 def activate(body: ActivateIn, p: Annotated[Principal, Depends(require_roles("admin"))]) -> dict:
     _require_mode()
-    wait = ratelimit.check(f"license-activate:{p.id}", 10)
+    wait = ratelimit.check_shared(f"license-activate:{p.id}", 10)
     if wait is not None:
         raise HTTPException(429, "muitas tentativas", headers={"Retry-After": str(wait)})
     try:
@@ -77,7 +77,7 @@ def activate(body: ActivateIn, p: Annotated[Principal, Depends(require_roles("ad
 @router.post("/renew", summary="Renova agora a autorização (o worker já renova sozinho, por exemplo uma vez por dia)")
 def renew(p: Annotated[Principal, Depends(require_roles("admin"))]) -> dict:
     _require_mode()
-    wait = ratelimit.check(f"license-renew:{p.id}", 6)
+    wait = ratelimit.check_shared(f"license-renew:{p.id}", 6)
     if wait is not None:
         raise HTTPException(429, "muitas tentativas", headers={"Retry-After": str(wait)})
     try:

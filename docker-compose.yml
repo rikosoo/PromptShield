@@ -30,6 +30,7 @@ services:
       LOCAL_AUTH_SECRET: ${LOCAL_AUTH_SECRET:-}
       ORIGINAL_TEXT_MASTER_KEY: ${ORIGINAL_TEXT_MASTER_KEY:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}             # quantos proxies de confiança há à frente da API (0 = ignora X-Forwarded-For)
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
       CONSOLE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
       # licenciamento on-premise (docs/licenciamento.md); off = nada muda

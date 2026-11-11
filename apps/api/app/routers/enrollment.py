@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 
 from app import audit, audit_system, license, ratelimit
+from app.clientip import client_ip
 from app.config import settings
 from app.csvsafe import csv_safe
 from app.db import anonymous_session, tenant_session
@@ -89,7 +90,7 @@ def revoke_token(token_id: uuid.UUID, p: Annotated[Principal, Depends(require_ro
 
 @router.post("/enroll", status_code=201, summary="Troca um token de matrícula por uma chave de API própria da máquina (sem login)")
 def enroll(body: EnrollIn, request: Request) -> dict:
-    wait = ratelimit.check(f"enroll:{request.client.host if request.client else '?'}", settings.rate_limit_enroll_per_minute)
+    wait = ratelimit.check_shared(f"enroll:{client_ip(request)}", settings.rate_limit_enroll_per_minute)
     if wait is not None:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "muitas tentativas", headers={"Retry-After": str(wait)})
     refused: license.Refused | None = None
