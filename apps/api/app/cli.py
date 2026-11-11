@@ -80,6 +80,7 @@ def main() -> None:
     sp.add_argument("--reason", default="", help="texto curto que o administrador da empresa vê no console (ex.: fatura em atraso)")
     rs = sub.add_parser("resume", help="reativa uma empresa suspensa")
     rs.add_argument("--slug", required=True)
+    sub.add_parser("update-ready", help="mostra (em JSON) a atualização já baixada e conferida, para o atualizar.sh; sai com código 1 se não houver")
     pw = sub.add_parser("set-password", help="define a senha de um usuário do console (é assim que o primeiro administrador passa a ter senha)")
     pw.add_argument("--email", required=True)
     pw.add_argument("--generate", action="store_true", help="gera uma senha temporária e a mostra UMA vez; a pessoa troca no primeiro acesso (padrão se não houver terminal)")
@@ -87,6 +88,18 @@ def main() -> None:
     sub.add_parser("rewrap-keys", help="troca a chave mestra: reembrulha as chaves de dados (lê OLD_MASTER_KEY e NEW_MASTER_KEY do ambiente)")
     args = ap.parse_args()
     url = settings.admin_database_url or settings.database_url
+    if args.cmd == "update-ready":
+        import json
+        import sys
+
+        from app import updates
+
+        info = updates.ready_info()
+        if info is None:
+            print("nenhuma atualização pronta: aprove o download em Administração > Atualizações e espere o status «pronta»", file=sys.stderr)
+            raise SystemExit(1)
+        print(json.dumps(info))
+        return
     if args.cmd == "set-password":
         import getpass
         import sys

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app import alerts, crypto, governance, metrics
+from app import alerts, crypto, governance, metrics, rulepacks
 from app.config import settings
 from app.keywords import matcher
 from app.models import Analysis, Event, Incident, KeywordRule, Policy, Tenant
@@ -117,7 +117,10 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
 
     tenant = session.get(Tenant, p.tenant_id)
     assert tenant is not None
-    an = analyze(_engine_event(ev), ner=_ner, allowed_hosts=governance.allowed_hosts(session), weights=tenant.risk_weights or None)
+    live = rulepacks.current()          # pacote de regras em sombra ou ativo (None = só o motor de fábrica)
+    weights = {**(live.weights if live else {}), **(tenant.risk_weights or {})} or None       # os pesos da empresa sempre vencem os do pacote
+    an = analyze(_engine_event(ev), ner=_ner, allowed_hosts=governance.allowed_hosts(session), weights=weights,
+                 rule_pack=live.pack if live else None, pack_mode=live.mode if live else "active")
 
     kw_found = matcher.find_hits(text, [matcher.Rule(str(k.id), k.term, k.whole_word, k.score, k.fuzzy) for k in
                                         session.execute(select(KeywordRule).where(KeywordRule.enabled.is_(True))).scalars()])
@@ -169,6 +172,8 @@ def ingest(session: Session, p: Principal, ev: EventIn, force_monitor: bool = Fa
         reasons=an.risk["reasons"], findings=an.findings, engine_version=an.engine_version, spans=[{"start": s.start, "end": s.end, "type": s.type, "masked": s.masked} for s in an.spans],
         decision=pe.decision, would_decide=pe.would_decide, policy_hits=pe.hits, score_version=an.score_version)
     session.add(analysis)
+    if live is not None:
+        rulepacks.record_hits(session, live, an.flags.get("pack"))
     incident_id = None
     if an.risk["score"] >= INCIDENT_MIN_SCORE or kw_hits:     # palavra-chave sempre aparece como alerta "Novo" na lista, mesmo com score baixo
         inc = Incident(tenant_id=p.tenant_id, event_pk=pk,

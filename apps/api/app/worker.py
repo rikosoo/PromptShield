@@ -78,6 +78,10 @@ def run_once() -> dict:
         from app import license_client
 
         out["license"] = 0 if license_client.renew_if_due() in ("desligado", "não ativado", "em dia", "aguardando nova tentativa") else 1
+        if license_client.enabled():
+            from app import updates
+
+            out["updates"] = len(updates.tick())
     except Exception:  # noqa: BLE001 - o worker não pode morrer por causa do licenciamento
         log.exception("falha ao renovar a licença")
     with anonymous_session() as s:

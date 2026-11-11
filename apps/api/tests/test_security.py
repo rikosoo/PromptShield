@@ -27,7 +27,9 @@ ENROLL = "enroll"  # sem login por definição: a credencial é o token de matr�
 EXPECTED: dict[tuple[str, str], object] = {
     ("GET", "/health"): PUBLIC, ("GET", "/version"): PUBLIC,
     ("GET", "/v1/me"): ANY, ("POST", "/dev/token"): DEV,
-    ("POST", "/auth/login"): ENROLL, ("POST", "/v1/me/password"): ALL, ("POST", "/v1/users/{user_id}/password"): ADMIN,      # /auth/login: sem credencial por definição (a senha vai no corpo); teste próprio em test_local_auth.py
+    ("POST", "/auth/login"): ENROLL, ("POST", "/v1/me/password"): ALL, ("POST", "/v1/users/{user_id}/password"): ADMIN,
+    ("GET", "/v1/updates"): ADMIN, ("POST", "/v1/updates/app/approve"): ADMIN, ("POST", "/v1/updates/retry"): ADMIN,
+    ("GET", "/v1/rule-packs/{pack_id}"): ADMIN, ("POST", "/v1/rule-packs/{pack_id}/phase"): ADMIN,      # /auth/login: sem credencial por definição (a senha vai no corpo); teste próprio em test_local_auth.py
     ("GET", "/v1/alerts"): ALL, ("GET", "/v1/taxonomy"): ALL, ("GET", "/v1/stats/overview"): ALL, ("GET", "/v1/stats/categories"): ALL,
     ("GET", "/v1/stats/risk"): ALL, ("GET", "/v1/stats/signals"): ALL, ("GET", "/v1/tenant"): ALL, ("GET", "/v1/events"): ALL, ("GET", "/v1/people"): ALL, ("GET", "/v1/license/status"): ALL, ("PUT", "/v1/device/ias"): KEY, ("GET", "/v1/devices/export.csv"): ("admin", "auditor"), ("POST", "/v1/license/activate"): ("admin",), ("POST", "/v1/license/renew"): ("admin",), ("POST", "/v1/events/{event_id}/feedback"): ("admin", "analista"), ("GET", "/v1/feedback/summary"): ("admin", "analista", "auditor"), ("GET", "/v1/feedback/export.jsonl"): ("admin", "auditor"), ("GET", "/v1/events/export.csv"): ("admin", "auditor"), ("GET", "/v1/events/{event_id}"): ALL,
     ("GET", "/v1/incidents"): ALL, ("GET", "/v1/incidents/{incident_id}"): ALL, ("GET", "/v1/policies"): ALL,

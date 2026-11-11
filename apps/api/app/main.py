@@ -31,6 +31,7 @@ from app.routers import (
     reports,
     sensor,
 )
+from app.routers import updates as updates_router
 
 
 @asynccontextmanager
@@ -106,6 +107,7 @@ app.include_router(policies.router)
 app.include_router(governance.router)
 app.include_router(keywords_router)
 app.include_router(auth_local.router)
+app.include_router(updates_router.router)
 app.include_router(admin.router)
 app.include_router(analytics.router)
 app.include_router(alerts.router)

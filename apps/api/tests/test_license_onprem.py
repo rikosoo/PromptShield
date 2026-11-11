@@ -19,7 +19,7 @@ from sqlalchemy import text
 
 pytestmark = pytest.mark.db
 LIC_DIR = Path(__file__).resolve().parents[2] / "licensing"
-LIC_TABLES = "lic_nonces, lic_authorizations, lic_installations, lic_activation_codes, lic_contracts, lic_customers, lic_audit"
+LIC_TABLES = "lic_releases, lic_admins, lic_nonces, lic_authorizations, lic_installations, lic_activation_codes, lic_contracts, lic_customers, lic_audit"
 
 
 class Clock:

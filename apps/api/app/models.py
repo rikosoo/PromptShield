@@ -229,6 +229,52 @@ class LicenseRecord(Base):
     updated_at: Mapped[datetime] = _ts()
 
 
+class UpdateState(Base):
+    """Aviso de versão do fornecedor, por tipo (`app` ou `rules`), e o andamento da atualização aprovada pelo administrador. Sem tenant e sem RLS."""
+    __tablename__ = "update_state"
+    kind: Mapped[str] = mapped_column(String(8), primary_key=True)
+    notice: Mapped[str] = mapped_column(Text)                          # o aviso ASSINADO como veio (reconferido antes de usar)
+    version: Mapped[str] = mapped_column(String(40))
+    security: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    size: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[str] = mapped_column(String(64))
+    file: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(12), default="available")     # available | approved | ready | staged | failed
+    error: Mapped[str | None] = mapped_column(String(300))
+    approved_by: Mapped[str | None] = mapped_column(String(320))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = _ts()
+
+
+class RulePackRow(Base):
+    """Pacote de regras recebido do fornecedor. staged (guardado, sem efeito) -> shadow (registra o que casaria, sem efeito) -> active (vale). Um por vez."""
+    __tablename__ = "rule_packs"
+    id: Mapped[uuid.UUID] = _pk()
+    version: Mapped[str] = mapped_column(String(40), unique=True)
+    sha256: Mapped[str] = mapped_column(String(64))
+    token: Mapped[str] = mapped_column(Text)                           # o pacote ASSINADO (reconferido a cada carga)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(10), default="staged")
+    received_at: Mapped[datetime] = _ts()
+    activated_by: Mapped[str | None] = mapped_column(String(320))
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RulePackHit(Base):
+    __tablename__ = "rule_pack_hits"
+    pack_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("rule_packs.id", ondelete="CASCADE"), primary_key=True)
+    rule_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(10), primary_key=True)
+    hits: Mapped[int] = mapped_column(BigInteger, default=0)
+    first_at: Mapped[datetime] = _ts()
+    last_at: Mapped[datetime] = _ts()
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

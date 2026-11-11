@@ -5,6 +5,7 @@ assinatura e o vínculo com a própria chave, e interpreta o resultado com as re
 Com LICENSE_MODE=off (padrão) nada disto é consultado. Ver docs/licenciamento.md."""
 from __future__ import annotations
 
+import logging
 import os
 import socket
 import threading
@@ -34,6 +35,7 @@ from app.config import settings
 from app.db import anonymous_session
 from app.models import LicenseRecord
 
+log = logging.getLogger("promptshield.license")
 ACTIVE_WINDOW_DAYS = 45
 HIGH_WATER_STEP = timedelta(minutes=5)
 CACHE_SECONDS = 10.0
@@ -173,7 +175,7 @@ def _touch(now: datetime) -> None:
 
 
 # ---------- conversa com o serviço de licenças ----------
-def _post(path: str, request: str) -> str:
+def _post_json(path: str, request: str) -> dict:
     url = _server_url() + path
     try:
         with http_factory() as c:
@@ -182,8 +184,10 @@ def _post(path: str, request: str) -> str:
         raise LicenseError("unreachable", "não foi possível falar com o serviço de licenças", 502) from exc
     if r.status_code == 200:
         try:
-            return str(r.json()["authorization"])
-        except (ValueError, KeyError, TypeError) as exc:
+            body = r.json()
+            body["authorization"] = str(body["authorization"])
+            return body
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
             raise LicenseError("bad_response", "resposta inesperada do serviço de licenças", 502) from exc
     if r.status_code == 429 or r.status_code >= 500:
         raise LicenseError("unreachable", f"serviço de licenças indisponível ({r.status_code})", 502)
@@ -192,6 +196,10 @@ def _post(path: str, request: str) -> str:
         raise LicenseError(str(body.get("code", "refused")), str(body.get("detail", "recusado")), r.status_code)
     except ValueError as exc:
         raise LicenseError("refused", "recusado pelo serviço de licenças", r.status_code) from exc
+
+
+def _post(path: str, request: str) -> str:
+    return str(_post_json(path, request)["authorization"])
 
 
 def _accept(token: str, inst: Installation, rec: LicenseRecord | None, now: datetime) -> Authorization:
@@ -256,13 +264,24 @@ def renew(now: datetime | None = None) -> LicenseState:
     if inst is None:
         raise LicenseError("no_identity", "identidade da instalação não encontrada (LICENSE_STATE_DIR)", 500)
     try:
-        req = build_request(inst, "renew", now, device_count=active_devices(now), version=settings.version)
-        token = _post("/v1/renew", req)
+        from app import updates
+
+        try:
+            extra = updates.report_fields()
+        except Exception:  # noqa: BLE001 - contar o estado das atualizações nunca pode impedir a validação
+            extra = {}
+        req = build_request(inst, "renew", now, device_count=active_devices(now), version=settings.version, **extra)
+        body = _post_json("/v1/renew", req)
+        token = body["authorization"]
         auth = _accept(token, inst, snap.record, now)
     except LicenseError as err:
         _fail(now, err)
         raise
     _store(token, auth, inst, now)
+    try:
+        updates.record_notices(body.get("releases") if isinstance(body.get("releases"), dict) else None, now)    # avisos de versão: assinados e conferidos aqui
+    except Exception:  # noqa: BLE001
+        log.warning("não consegui guardar os avisos de versão desta validação")
     return state(now)
 
 
