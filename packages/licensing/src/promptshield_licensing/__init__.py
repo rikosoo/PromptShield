@@ -16,7 +16,16 @@ from .crypto import (
     verify_blob,
 )
 from .packages import PACKAGE_PRODUCT, RULES_PRODUCT, sha256_file, sign_package, verify_package
-from .releases import ReleaseError, ReleaseNotice, is_newer, issue_notice, parse_version, sign_rulepack, verify_notice, verify_rulepack
+from .releases import (
+    ReleaseError,
+    ReleaseNotice,
+    is_newer,
+    issue_notice,
+    parse_version,
+    sign_rulepack,
+    verify_notice,
+    verify_rulepack,
+)
 from .requests import RequestError, build_request, verify_request
 from .states import LicenseState, State, evaluate
 
