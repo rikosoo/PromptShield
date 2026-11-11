@@ -149,3 +149,23 @@ export interface KeywordRow { id: string; term: string; whole_word: boolean; fuz
 export interface AllowlistRow { id: string; kind: "host"; value: string; note: string | null; created_by: string; created_at: string }
 
 export interface Collaborator { id: string; email: string; display_name: string | null; role: "admin" | "analista" | "auditor" | "leitura"; department: string | null; active: boolean; created_at: string; is_me: boolean; has_password?: boolean; must_change_password?: boolean; locked?: boolean }
+
+export type UpdateStatus = "available" | "approved" | "downloading" | "ready" | "failed" | "staged";
+export interface UpdateNotice {
+  version: string; security: boolean; notes: string; size: number; sha256: string; file: string; status: UpdateStatus;
+  error: string | null; approved_by: string | null; approved_at: string | null; ready_at: string | null;
+}
+export interface RulePackSummary {
+  id: string; version: string; status: "staged" | "shadow" | "active" | "retired"; notes: string; received_at: string;
+  activated_by: string | null; promoted_at: string | null; rules: number; weights: Record<string, number>; hits: number;
+}
+export interface RulePackDetail {
+  id: string; version: string; status: RulePackSummary["status"]; notes: string; weights: Record<string, number>;
+  rules: { id: string; category: string; rule: string; kind: string; hits_shadow: number; hits_active: number; last_hit: string | null }[];
+}
+export interface UpdatesInfo {
+  mode: "off" | "onprem";
+  app?: { installed: string; notice: UpdateNotice | null; ready_path: string | null };
+  rules?: { installed: string | null; live: string | null; notice: UpdateNotice | null };
+  packs?: RulePackSummary[];
+}

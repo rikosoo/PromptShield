@@ -3,7 +3,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { contractNotice } from "@/lib/contract";
+import { api } from "@/lib/api";
 import { licenseNotice } from "@/lib/license";
+import { updatesNotice } from "@/lib/updates";
+import type { UpdatesInfo } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/labels";
 import { SessionProvider, useSession } from "./session";
 
@@ -14,7 +17,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   { title: "Incidentes", items: [{ href: "/incidents", label: "Incidentes" }, { href: "/alerts", label: "Alertas e SIEM" }, { href: "/history", label: "Todos os prompts" }, { href: "/quality", label: "Qualidade da detecção" }] },
   { title: "Usuários e grupos", items: [{ href: "/users", label: "Usuários" }, { href: "/risk", label: "Risco por usuário" }, { href: "/groups", label: "Grupos" }] },
   { title: "Políticas", items: [{ href: "/policies", label: "Políticas" }, { href: "/exceptions", label: "Exceções" }, { href: "/allowlist", label: "Domínios permitidos" }, { href: "/keywords", label: "Palavras-chave" }] },
-  { title: "Administração", items: [{ href: "/collaborators", label: "Colaboradores", adminOnly: true }, { href: "/sensors", label: "Sensores" }, { href: "/devices", label: "Dispositivos" }, { href: "/license", label: "Licença" }, { href: "/privacy", label: "Privacidade e segurança" }, { href: "/inference-hooks", label: "Inference hooks" }, { href: "/pilot", label: "Piloto" }] },
+  { title: "Administração", items: [{ href: "/collaborators", label: "Colaboradores", adminOnly: true }, { href: "/sensors", label: "Sensores" }, { href: "/devices", label: "Dispositivos" }, { href: "/license", label: "Licença" }, { href: "/updates", label: "Atualizações", adminOnly: true }, { href: "/privacy", label: "Privacidade e segurança" }, { href: "/inference-hooks", label: "Inference hooks" }, { href: "/pilot", label: "Piloto" }] },
 ];
 
 function ThemeToggle() {
@@ -57,6 +60,8 @@ function Frame({ children }: { children: ReactNode }) {
   const visible = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((n) => !n.adminOnly || me.role === "admin") })).filter((g) => g.items.length > 0);
   const activeTitle = visible.find((g) => g.items.some((n) => (n.href === "/" ? path === "/" : path.startsWith(n.href))))?.title;
   const [closed, toggleSection] = useClosedSections(activeTitle);
+  const [upd, setUpd] = useState<UpdatesInfo | null>(null);
+  useEffect(() => { if (me.role === "admin" && license?.mode === "onprem") api<UpdatesInfo>("v1/updates").then(setUpd, () => setUpd(null)); }, [me.role, license?.mode, path]);
   // ao ir para uma página, a seção dela reabre (só na troca de página: recolher depois continua funcionando)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (activeTitle && closed.includes(activeTitle)) toggleSection(activeTitle); }, [path]);
@@ -117,6 +122,14 @@ function Frame({ children }: { children: ReactNode }) {
             <div role={l.level === "crit" ? "alert" : "status"} data-testid="license-notice"
               className={`border-b px-4 py-2 text-sm md:px-6 ${l.level === "crit" ? "border-crit bg-crit-bg text-crit" : "border-med bg-med-bg text-med"}`}>
               <strong>{l.title}.</strong> {l.text} <Link href={l.href} className="underline">Ver a licença</Link>
+            </div>
+          );
+        })()}
+        {(() => {
+          const un = updatesNotice(upd);
+          return un && (
+            <div role="status" data-testid="updates-notice" className={`border-b px-4 py-2 text-sm md:px-6 ${un.level === "warn" ? "border-med bg-med-bg text-med" : "border-line bg-surface-2"}`}>
+              {un.text} <Link href="/updates" className="underline">Ver atualizações</Link>
             </div>
           );
         })()}
