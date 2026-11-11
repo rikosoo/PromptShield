@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Auditoria{% endblock %}
+{% block content %}
+<h1>Auditoria</h1>
+<p class="muted small">Registro só de inserção: ninguém, nem o banco, altera ou apaga. Mostra as últimas 200 entradas{% if contrato %} do contrato <span class="mono">{{ contrato }}</span> (<a href="/painel/auditoria">ver todas</a>){% endif %}.</p>
+<div class="card"><div class="scroll"><table data-testid="audit"><thead><tr><th scope="col">Quando</th><th scope="col">Quem</th><th scope="col">O que</th><th scope="col">Contrato</th><th scope="col">Detalhe</th></tr></thead><tbody>
+{% for e in entries %}<tr><td class="small">{{ e.at | dt }}</td><td>{{ e.actor }}</td><td>{{ e.action }}</td><td class="mono small">{% if e.contract_id %}<a href="/painel/contratos/{{ e.contract_id }}">{{ e.contract_id | string | truncate(8, True, '') }}…</a>{% else %}—{% endif %}</td><td class="small mono">{{ e.detail }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Sem registros.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

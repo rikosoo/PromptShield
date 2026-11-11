@@ -109,6 +109,7 @@ class Admin(Base):
     email: Mapped[str] = mapped_column(String(320))
     password_hash: Mapped[str] = mapped_column(Text)
     totp_secret_enc: Mapped[str | None] = mapped_column(Text)           # nulo: esta conta não exige o código (só desenvolvimento)
+    last_totp_step: Mapped[int | None] = mapped_column(BigInteger)       # último passo de 30 s já aceito: o mesmo código não vale duas vezes
     password_version: Mapped[int] = mapped_column(Integer, default=1)    # sobe ao trocar a senha e derruba as sessões abertas
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

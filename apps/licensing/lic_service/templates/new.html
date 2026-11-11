@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Novo cliente{% endblock %}
+{% block content %}
+<h1>Novo cliente e contrato</h1>
+<div class="card" style="max-width:40rem">
+  <p class="muted small">O contrato nasce <strong>pendente</strong>: o prazo só começa quando o cliente ativa com o código. Entra com a política semanal recomendada (validação toda semana, aviso ao cliente após {{ d.DEFAULT_WARN_DAYS }} dias sem validar, suspensão após {{ d.DEFAULT_SUSPEND_DAYS }}); dá para ajustar depois.</p>
+  <form method="post" action="/painel/clientes" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="customer">Nome do cliente</label><input id="customer" name="customer" required maxlength="200">
+    <label for="contact_email">E-mail de contato (opcional)</label><input id="contact_email" name="contact_email" type="email" maxlength="320">
+    <div class="row">
+      <div><label for="devices">Máquinas permitidas</label><input id="devices" name="devices" type="number" min="0" value="50" required></div>
+      <div><label for="months">Duração (meses)</label><input id="months" name="months" type="number" min="1" max="120" value="12" required></div>
+      <div><label for="tolerance_days">Tolerância após o fim (dias)</label><input id="tolerance_days" name="tolerance_days" type="number" min="0" value="15" required></div>
+    </div>
+    <label for="on_end">Se o contrato for ENCERRADO, a inspeção…</label>
+    <select id="on_end" name="on_end"><option value="stop_inspection">para (consulta e exportação continuam)</option><option value="keep_inspection">continua</option></select>
+    <label for="note">Observação interna (opcional)</label><textarea id="note" name="note" rows="2" maxlength="2000"></textarea>
+    <p><button class="primary" type="submit">Criar cliente e contrato</button></p>
+  </form>
+</div>
+{% endblock %}

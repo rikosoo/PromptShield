@@ -15,11 +15,12 @@ from .crypto import (
     sign_blob,
     verify_blob,
 )
+from .packages import PACKAGE_PRODUCT, sha256_file, sign_package, verify_package
 from .requests import RequestError, build_request, verify_request
 from .states import LicenseState, State, evaluate
 
 __all__ = [
-    "Authorization", "AuthorizationError", "Installation", "LicenseState", "RequestError", "SignatureError", "State", "b64d", "b64e",
+    "Authorization", "AuthorizationError", "PACKAGE_PRODUCT", "sha256_file", "sign_package", "verify_package", "Installation", "LicenseState", "RequestError", "SignatureError", "State", "b64d", "b64e",
     "build_request", "evaluate", "fingerprint", "generate_signing_key", "issue_authorization", "load_private_key", "load_public_key",
     "public_key_b64", "sign_blob", "verify_authorization", "verify_blob", "verify_request",
 ]

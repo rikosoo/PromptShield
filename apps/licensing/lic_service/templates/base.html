@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{% block title %}Painel{% endblock %} · PromptShield, licenças</title>
+<style>
+:root { --bg:#f3f4f7; --panel:#fff; --fg:#17202b; --muted:#5b6675; --line:#d6dbe3; --accent:#0b5cad; --accent-fg:#fff; --ok:#1f7a45; --ok-bg:#e1f3e8; --warn:#8a5a00; --warn-bg:#fdf0cf; --high:#a64400; --high-bg:#fde5d2; --crit:#a3201a; --crit-bg:#fbdfdd; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0e131a; --panel:#161d27; --fg:#e6ebf2; --muted:#9aa6b6; --line:#2a3544; --accent:#5aa3ee; --accent-fg:#06121f; --ok:#6fd49a; --ok-bg:#16342380; --warn:#f0c15a; --warn-bg:#3a2e0f; --high:#f2a36b; --high-bg:#3d2412; --crit:#ff8a82; --crit-bg:#401917; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color:var(--accent); }
+header.top { background:var(--panel); border-bottom:1px solid var(--line); padding:.6rem 1.2rem; display:flex; flex-wrap:wrap; gap:.4rem 1.2rem; align-items:center; }
+header.top strong { font-size:1.05rem; }
+header.top nav { display:flex; flex-wrap:wrap; gap:.2rem .9rem; }
+header.top nav a { text-decoration:none; padding:.2rem 0; border-bottom:2px solid transparent; }
+header.top nav a[aria-current="page"] { border-color:var(--accent); font-weight:600; }
+header.top .who { margin-left:auto; display:flex; gap:.6rem; align-items:center; color:var(--muted); font-size:.9rem; }
+main { max-width:76rem; margin:0 auto; padding:1.2rem; }
+h1 { font-size:1.35rem; margin:.2rem 0 .8rem; } h2 { font-size:1.05rem; margin:0 0 .6rem; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:1rem 1.1rem; margin:0 0 1rem; }
+.grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(22rem, 1fr)); align-items:start; }
+table { width:100%; border-collapse:collapse; font-size:.92rem; }
+th, td { text-align:left; padding:.45rem .55rem; border-top:1px solid var(--line); vertical-align:top; }
+th { font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border-top:0; }
+.scroll { overflow-x:auto; }
+label { display:block; font-size:.82rem; color:var(--muted); margin:.5rem 0 .15rem; }
+input, select, textarea { width:100%; padding:.45rem .55rem; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--fg); font:inherit; }
+input[type=checkbox] { width:auto; }
+.check { display:flex; gap:.5rem; align-items:center; color:var(--fg); font-size:.9rem; }
+button, .btn { display:inline-block; padding:.45rem .9rem; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--fg); font:inherit; cursor:pointer; text-decoration:none; }
+button.primary { background:var(--accent); color:var(--accent-fg); border-color:var(--accent); }
+button.danger { border-color:var(--crit); color:var(--crit); }
+.row { display:grid; gap:.8rem; grid-template-columns:repeat(auto-fit, minmax(9rem, 1fr)); }
+.muted { color:var(--muted); } .small { font-size:.85rem; } .mono { font-family:ui-monospace, Consolas, monospace; }
+.badge { display:inline-block; padding:.05rem .5rem; border-radius:99px; font-size:.78rem; border:1px solid var(--line); }
+.lv0 { color:var(--ok); background:var(--ok-bg); border-color:transparent; } .lv1 { color:var(--warn); background:var(--warn-bg); border-color:transparent; }
+.lv2 { color:var(--high); background:var(--high-bg); border-color:transparent; } .lv3 { color:var(--crit); background:var(--crit-bg); border-color:transparent; }
+.alert { padding:.5rem .7rem; border-radius:6px; margin:.3rem 0; font-size:.9rem; }
+.flash { padding:.6rem .9rem; border-radius:6px; margin:0 0 1rem; border:1px solid; }
+.flash.ok { color:var(--ok); background:var(--ok-bg); border-color:var(--ok); } .flash.err { color:var(--crit); background:var(--crit-bg); border-color:var(--crit); }
+.code { font-family:ui-monospace, Consolas, monospace; font-size:1.05rem; padding:.8rem; border:2px dashed var(--accent); border-radius:6px; word-break:break-all; background:var(--bg); }
+.kpis { display:flex; flex-wrap:wrap; gap:.8rem; margin-bottom:1rem; } .kpi { flex:1 1 9rem; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.7rem .9rem; } .kpi b { display:block; font-size:1.5rem; }
+pre.readme { white-space:pre-wrap; word-break:break-word; background:var(--bg); padding:1rem; border-radius:6px; border:1px solid var(--line); font-size:.88rem; }
+form.inline { display:inline; }
+:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+</style>
+</head>
+<body>
+{% if auth %}
+<header class="top">
+  <strong>PromptShield · licenças</strong>
+  <nav aria-label="Principal">
+    <a href="/painel/visao-geral" {% if nav == 'visao' %}aria-current="page"{% endif %}>Visão geral</a>
+    <a href="/painel/clientes/novo" {% if nav == 'novo' %}aria-current="page"{% endif %}>Novo cliente</a>
+    <a href="/painel/downloads" {% if nav == 'downloads' %}aria-current="page"{% endif %}>Pacotes e instalador</a>
+    <a href="/painel/auditoria" {% if nav == 'auditoria' %}aria-current="page"{% endif %}>Auditoria</a>
+  </nav>
+  <div class="who"><span>{{ auth.email }}</span><a href="/painel/senha">Senha</a>
+    <form method="post" action="/painel/sair" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Sair</button></form></div>
+</header>
+{% endif %}
+<main>
+{% if flash %}<p role="{{ 'status' if flash.ok else 'alert' }}" class="flash {{ 'ok' if flash.ok else 'err' }}">{{ flash.t }}</p>{% endif %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

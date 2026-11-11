@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Visão geral{% endblock %}
+{% block content %}
+<h1>Visão geral</h1>
+<div class="kpis">
+  <div class="kpi"><b>{{ summary.total }}</b><span class="muted small">contratos</span></div>
+  <div class="kpi"><b>{{ summary.active }}</b><span class="muted small">ativos</span></div>
+  <div class="kpi"><b>{{ summary.alert }}</b><span class="muted small">com alerta</span></div>
+  <div class="kpi"><b>{{ summary.warned }}</b><span class="muted small">cliente já avisado (sem validar)</span></div>
+  <div class="kpi"><b>{{ summary.suspended }}</b><span class="muted small">inspeção suspensa</span></div>
+</div>
+<div class="card">
+  <h2>Contratos (os mais urgentes primeiro)</h2>
+  {% if not rows %}<p class="muted">Nenhum contrato ainda. <a href="/painel/clientes/novo">Cadastre o primeiro cliente</a>.</p>{% else %}
+  <div class="scroll"><table data-testid="contracts">
+    <caption class="muted small" style="text-align:left">Horários em Brasília. «Última validação» é o último contato bem-sucedido da instalação com este serviço.</caption>
+    <thead><tr><th scope="col">Cliente</th><th scope="col">Contrato</th><th scope="col">Dias restantes</th><th scope="col">Última validação</th><th scope="col">Versão</th><th scope="col">Máquinas</th><th scope="col">Alertas</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr data-testid="contract-row">
+        <th scope="row"><a href="/painel/contratos/{{ r.id }}">{{ r.customer }}</a><div class="muted small">{{ r.hostname or '' }}</div></th>
+        <td><span class="badge lv{{ 0 if r.status == 'ativo' else 1 if r.status == 'pendente' else 2 }}">{{ r.status }}</span></td>
+        <td>{% if r.days_left is none %}<span class="muted">começa na ativação</span>{% else %}<span class="{{ 'lv3' if r.days_left < 0 else 'lv1' if r.days_left <= 30 else '' }} badge">{{ r.days_left }}</span> <span class="muted small">{{ r.ends_at | d }}</span>{% endif %}</td>
+        <td>{% if r.has_installation %}{{ r.last_issued_at | dt }}<div class="muted small">{{ r.last_issued_at | since(now) }}</div>{% else %}<span class="muted">sem instalação</span>{% endif %}</td>
+        <td>{{ r.version or '—' }}</td>
+        <td>{{ r.devices_used if r.devices_used is not none else '—' }} / {{ r.devices_max }}</td>
+        <td>{% if not r.alerts %}<span class="badge lv0">em dia</span>{% endif %}{% for lvl, text in r.alerts %}<div class="alert lv{{ lvl }}">{{ text }}</div>{% endfor %}</td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% endif %}
+</div>
+<div class="card">
+  <h2>Pedidos recusados nos últimos 7 dias</h2>
+  {% if not refusals %}<p class="muted">Nenhum. Instalação não reconhecida, código inválido ou pedido repetido aparecem aqui.</p>{% else %}
+  <div class="scroll"><table><thead><tr><th scope="col">Quando</th><th scope="col">O que</th><th scope="col">Motivo</th><th scope="col">Origem (IP)</th></tr></thead><tbody>
+  {% for e in refusals %}<tr><td>{{ e.at | dt }}</td><td>{{ e.action }}</td><td>{{ e.code or '—' }}</td><td class="mono">{{ e.ip or '—' }}</td></tr>{% endfor %}
+  </tbody></table></div>{% endif %}
+</div>
+{% endblock %}

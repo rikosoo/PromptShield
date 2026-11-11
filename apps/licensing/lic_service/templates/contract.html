@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}{{ customer.name }}{% endblock %}
+{% block content %}
+<p class="small"><a href="/painel/visao-geral">← Visão geral</a></p>
+<h1>{{ customer.name }} <span class="badge lv{{ 0 if k.status == 'ativo' else 1 if k.status == 'pendente' else 2 }}">{{ k.status }}</span></h1>
+<p class="muted small">Contrato <span class="mono">{{ k.id }}</span>{% if customer.contact_email %} · {{ customer.contact_email }}{% endif %}</p>
+
+{% if new_code %}
+<div class="card" data-testid="new-code-card" role="status">
+  <h2>Código de ativação (aparece só agora)</h2>
+  <p class="code" data-testid="new-code">{{ new_code }}</p>
+  <p class="small muted">Uso único. No banco fica só o hash, então não dá para ver de novo: se perder, gere outro (o anterior deixa de valer). Envie ao cliente <strong>por um canal diferente</strong> do usado para o pacote. Vale {{ codes[0].expires_at | dt }}.</p>
+</div>
+{% endif %}
+
+{% for lvl, text in row.alerts %}<div class="alert lv{{ lvl }}" role="note">{{ text }}</div>{% endfor %}
+
+<div class="grid">
+  <section class="card" aria-labelledby="h-prazo">
+    <h2 id="h-prazo">Dias restantes</h2>
+    {% if k.ends_at %}
+      <p style="font-size:2rem;margin:.1rem 0"><strong data-testid="days-left">{{ row.days_left }}</strong> <span class="muted small">dia(s) · fim em {{ k.ends_at | d }}</span></p>
+      <form method="post" action="/painel/contratos/{{ k.id }}/prazo"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set">
+        <label for="end">Definir a data de fim</label><input id="end" name="end" type="date" required>
+        <label for="reason1">Motivo (fica na auditoria)</label><input id="reason1" name="reason" required minlength="3" maxlength="300">
+        <p><button type="submit">Definir data</button></p></form>
+      <form method="post" action="/painel/contratos/{{ k.id }}/prazo"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+        <label for="days">Somar (ou, com sinal de menos, tirar) dias</label><input id="days" name="days" type="number" step="1" required placeholder="ex.: 30 ou -10">
+        <label for="reason2">Motivo (fica na auditoria)</label><input id="reason2" name="reason" required minlength="3" maxlength="300">
+        <p><button type="submit">Aplicar</button></p></form>
+    {% else %}
+      <p class="muted">O prazo começa na <strong>ativação</strong>. Duração combinada: <strong>{{ k.term_months }} mês(es)</strong>.</p>
+      <form method="post" action="/painel/contratos/{{ k.id }}/prazo"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="months">
+        <label for="months">Duração em meses</label><input id="months" name="months" type="number" min="1" max="120" value="{{ k.term_months }}" required>
+        <p><button type="submit">Salvar duração</button></p></form>
+    {% endif %}
+    <p class="small muted">A instalação vê o novo prazo na próxima validação (no máximo {{ k.renew_after_hours // 24 if k.renew_after_hours >= 24 else k.renew_after_hours }} {{ 'dia(s)' if k.renew_after_hours >= 24 else 'h' }}).</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-codigo">
+    <h2 id="h-codigo">Código de ativação</h2>
+    {% if inst %}<p class="muted small">Este contrato já tem uma instalação vinculada. Para trocar de servidor, desvincule primeiro (abaixo).</p>
+    {% else %}
+      <form method="post" action="/painel/contratos/{{ k.id }}/codigo"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <label for="valid_days">Validade do código (dias)</label><input id="valid_days" name="valid_days" type="number" min="1" max="30" value="7" required>
+        <p><button class="primary" type="submit">Gerar código novo</button></p></form>
+      <p class="small muted">Gerar um código novo cancela os anteriores que ainda não foram usados.</p>
+    {% endif %}
+    {% if codes %}<table><thead><tr><th scope="col">Código</th><th scope="col">Validade</th><th scope="col">Situação</th></tr></thead><tbody>
+      {% for c in codes %}<tr><td class="mono">{{ c.prefix }}…</td><td>{{ c.expires_at | dt }}</td><td>{% if c.used_at %}usado em {{ c.used_at | dt }}{% elif c.expires_at <= now %}expirado/cancelado{% else %}<span class="badge lv1">aguardando uso</span>{% endif %}</td></tr>{% endfor %}
+    </tbody></table>{% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="h-inst">
+    <h2 id="h-inst">Instalação do cliente</h2>
+    {% if inst %}
+      <table><tbody>
+        <tr><th scope="row">Servidor</th><td>{{ inst.hostname or '—' }}</td></tr>
+        <tr><th scope="row">Versão</th><td>{{ inst.product_version or '—' }}</td></tr>
+        <tr><th scope="row">Última validação</th><td>{{ row.last_issued_at | dt }} <span class="muted small">({{ row.last_issued_at | since(now) }})</span></td></tr>
+        <tr><th scope="row">Último contato</th><td>{{ inst.last_seen_at | dt }}</td></tr>
+        <tr><th scope="row">Máquinas em uso</th><td>{{ inst.last_device_count if inst.last_device_count is not none else '—' }} de {{ k.max_devices }}</td></tr>
+        <tr><th scope="row">Última autorização</th><td>{% if last %}nº {{ last.serial }} ({{ last.status }}), vale até {{ last.auth_expires | dt }}{% else %}—{% endif %}</td></tr>
+        <tr><th scope="row">Identificador</th><td class="mono small">{{ inst.installation_id }}</td></tr>
+      </tbody></table>
+    {% else %}<p class="muted">Nenhuma instalação vinculada ainda.</p>{% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="h-cond">
+    <h2 id="h-cond">Condições do contrato</h2>
+    <form method="post" action="/painel/contratos/{{ k.id }}/condicoes"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="row">
+        <div><label for="devices">Máquinas permitidas</label><input id="devices" name="devices" type="number" min="0" value="{{ k.max_devices }}" required></div>
+        <div><label for="tolerance_days">Tolerância após o fim (dias)</label><input id="tolerance_days" name="tolerance_days" type="number" min="0" value="{{ k.tolerance_days }}" required></div>
+      </div>
+      <label for="on_end">Se o contrato for ENCERRADO, a inspeção…</label>
+      <select id="on_end" name="on_end"><option value="stop_inspection" {% if k.on_end == 'stop_inspection' %}selected{% endif %}>para (consulta e exportação continuam)</option><option value="keep_inspection" {% if k.on_end == 'keep_inspection' %}selected{% endif %}>continua</option></select>
+      <h3 style="font-size:.95rem;margin:1rem 0 .2rem">Validação com este servidor</h3>
+      <div class="row">
+        <div><label for="renew_days">Validar a cada (dias)</label><input id="renew_days" name="renew_days" type="number" min="1" max="90" value="{{ k.renew_after_hours // 24 if k.renew_after_hours >= 24 else 1 }}" required></div>
+        <div><label for="validity_days">Autorização vale (dias)</label><input id="validity_days" name="validity_days" type="number" min="1" value="{{ k.auth_validity_days }}" required></div>
+        <div><label for="warn_days">Avisar o cliente após (dias sem validar)</label><input id="warn_days" name="warn_days" type="number" min="1" value="{{ k.warn_after_days if k.warn_after_days is not none else '' }}" placeholder="vazio = não avisa"></div>
+        <div><label for="suspend_days">Suspender após (dias sem validar)</label><input id="suspend_days" name="suspend_days" type="number" min="1" value="{{ k.suspend_after_days if k.suspend_after_days is not none else '' }}" placeholder="vazio = não suspende"></div>
+      </div>
+      <p class="small muted">Os dias de «sem validar» contam a partir do momento em que a validação seguinte era esperada. A autorização precisa valer pelo menos a cadência mais o prazo de suspensão.</p>
+      <label for="note">Observação interna</label><textarea id="note" name="note" rows="2" maxlength="2000">{{ k.note or '' }}</textarea>
+      <p><button class="primary" type="submit">Salvar condições</button>
+         <button type="submit" name="preset" value="weekly">Usar a política semanal recomendada ({{ weekly.renew }} d · aviso {{ weekly.warn }} d · suspende {{ weekly.suspend }} d)</button></p>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="h-perigo">
+    <h2 id="h-perigo">Ações com efeito no cliente</h2>
+    {% if k.status == 'encerrado' %}
+      <form method="post" action="/painel/contratos/{{ k.id }}/reabrir"><input type="hidden" name="csrf" value="{{ csrf }}"><p class="small">Encerrado em {{ k.closed_at | dt }}: {{ k.close_reason or '—' }}</p><button type="submit">Reabrir contrato</button></form>
+    {% else %}
+      <form method="post" action="/painel/contratos/{{ k.id }}/encerrar"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <label for="close_reason">Motivo do encerramento</label><input id="close_reason" name="reason" required minlength="3" maxlength="300">
+        <label class="check"><input type="checkbox" name="confirm" value="sim"> Entendo que a instalação fica sabendo na próxima validação</label>
+        <p><button class="danger" type="submit">Encerrar contrato</button></p></form>
+    {% endif %}
+    {% if inst %}
+      <hr style="border:0;border-top:1px solid var(--line);margin:1rem 0">
+      <form method="post" action="/painel/contratos/{{ k.id }}/desvincular"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="check"><input type="checkbox" name="confirm" value="sim"> Desvincular a instalação (troca de servidor: exige código novo; o prazo não recomeça)</label>
+        <p><button class="danger" type="submit">Desvincular instalação</button></p></form>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="h-hist" style="grid-column:1 / -1">
+    <h2 id="h-hist">Histórico deste contrato</h2>
+    {% if not log %}<p class="muted">Sem registros.</p>{% else %}
+    <div class="scroll"><table><thead><tr><th scope="col">Quando</th><th scope="col">Quem</th><th scope="col">O que</th><th scope="col">Detalhe</th></tr></thead><tbody>
+    {% for e in log %}<tr><td>{{ e.at | dt }}</td><td>{{ e.actor }}</td><td>{{ e.action }}</td><td class="small mono">{{ e.detail }}</td></tr>{% endfor %}
+    </tbody></table></div>{% endif %}
+  </section>
+</div>
+{% endblock %}

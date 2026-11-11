@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from promptshield_licensing import SignatureError, fingerprint, load_private_key, public_key_b64
 from pydantic import BaseModel, Field
 
-from lic_service import service
+from lic_service import panel, service
 from lic_service.config import settings
 from lic_service.db import session_scope
 
@@ -47,6 +47,9 @@ def _key():
 
 class SignedRequest(BaseModel):
     request: Annotated[str, Field(min_length=20, max_length=4000)]
+
+
+app.include_router(panel.router)      # /painel: responde 404 enquanto PANEL_ENABLED não estiver ligado
 
 
 @app.get("/health")

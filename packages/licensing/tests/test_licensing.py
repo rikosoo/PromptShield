@@ -259,3 +259,18 @@ def test_silence_days_are_signed_and_validated(vendor, inst):
     assert evaluate(a, T0 + timedelta(days=20)).state == State.SEM_CONTATO and evaluate(a, T0 + timedelta(days=20)).days_left is None
     expired = evaluate(a, T0 + timedelta(days=60))                                                 # sem suspensão configurada: vale a regra antiga (expirado, inspeção continua)
     assert expired.state == State.EXPIRADO and expired.inspecting
+
+
+# ---------- assinatura de pacotes ----------
+def test_package_signature_binds_version_hash_and_product(vendor, tmp_path):
+    from promptshield_licensing import sha256_file, sign_package, verify_package
+    f = tmp_path / "pkg.zip"
+    f.write_bytes(b"conteudo sintetico")
+    digest = sha256_file(f)
+    assert digest == __import__("hashlib").sha256(b"conteudo sintetico").hexdigest()
+    sig = sign_package(vendor, "0.4.0", digest)
+    pub = vendor.public_key()
+    assert verify_package(pub, "0.4.0", digest, sig)
+    assert not verify_package(pub, "0.4.1", digest, sig) and not verify_package(pub, "0.4.0", "0" * 64, sig)           # versão ou conteúdo trocado
+    assert not verify_package(generate_signing_key().public_key(), "0.4.0", digest, sig)                              # outra chave
+    assert not verify_package(pub, "0.4.0", digest, "não é base64!!") and not verify_package(pub, "0.4.0", digest, "")

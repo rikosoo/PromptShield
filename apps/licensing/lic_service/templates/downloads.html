@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Pacotes e instalador{% endblock %}
+{% block content %}
+<h1>Pacotes e instalador</h1>
+<div class="card">
+  <h2>Como entregar a um cliente</h2>
+  <ol>
+    <li>Em <a href="/painel/clientes/novo">Novo cliente</a> (ou no contrato existente), <strong>gere o código de ativação</strong>.</li>
+    <li>Baixe o pacote abaixo e envie ao cliente <strong>junto com o SHA-256</strong> mostrado aqui (ele confere antes de instalar).</li>
+    <li>Envie o <strong>código de ativação por outro canal</strong> (por exemplo, telefone ou outra conversa). Quem tiver só o pacote não consegue ativar.</li>
+    <li>O cliente segue o <strong>LEIA-ME</strong> dentro do pacote (você pode ler aqui antes). Depois da ativação, esta página mostra a instalação no contrato.</li>
+  </ol>
+</div>
+<div class="card">
+  <h2>Pacotes disponíveis</h2>
+  {% if not signing_ready %}<p class="alert lv3" role="alert">A chave de assinatura (LICENSE_SIGNING_KEY) não está configurada ou está ilegível: nenhum pacote pode ser confirmado como autêntico, então nenhum download é liberado.</p>{% endif %}
+  {% if not pkgs %}
+    <p class="muted">Nenhum pacote encontrado em <span class="mono">{{ dir }}</span>. Pacotes são construídos numa máquina de build com <span class="mono">make release</span> e copiados para essa pasta junto com o manifesto e o LEIA-ME.</p>
+  {% else %}
+  <div class="scroll"><table data-testid="packages"><thead><tr><th scope="col">Versão</th><th scope="col">Arquivo</th><th scope="col">Tamanho</th><th scope="col">SHA-256</th><th scope="col">Integridade</th><th scope="col"><span style="position:absolute;left:-9999px">Ações</span></th></tr></thead><tbody>
+  {% for p in pkgs %}
+    <tr data-testid="package-row"><th scope="row">{{ p.version }}<div class="muted small">{{ p.built_at or '' }}</div></th><td class="mono small">{{ p.name }}</td><td>{{ p.size | size }}</td>
+      <td class="mono small" style="word-break:break-all;max-width:20rem">{{ p.sha256 }}</td>
+      <td>{% if p.trusted %}<span class="badge lv0">assinatura confere</span>{% elif not p.signature_ok %}<span class="badge lv3">assinatura NÃO confere</span>{% else %}<span class="badge lv3">arquivo foi alterado</span>{% endif %}</td>
+      <td>{% if p.trusted %}<a class="btn" href="/painel/downloads/{{ p.name }}">Baixar</a>{% endif %}{% if p.has_readme %} <a class="btn" href="/painel/downloads/{{ p.name }}/leia-me">Ler o LEIA-ME</a>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table></div>{% endif %}
+</div>
+{% endblock %}

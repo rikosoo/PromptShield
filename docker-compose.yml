@@ -113,6 +113,13 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://licensing:${LICENSING_DB_PASSWORD:-}@licensing-db:5432/licensing
       LICENSE_SIGNING_KEY: ${LICENSE_SIGNING_KEY:-}
+      # painel web do fornecedor (/painel): desligado por padrão; ver docs/painel-fornecedor.md. Só entra por VPN/lista de IPs e HTTPS.
+      PANEL_ENABLED: ${PANEL_ENABLED:-false}
+      PANEL_SECRET: ${PANEL_SECRET:-}
+      PANEL_COOKIE_SECURE: ${PANEL_COOKIE_SECURE:-true}
+      PANEL_REQUIRE_TOTP: ${PANEL_REQUIRE_TOTP:-true}
+      PACKAGES_DIR: /srv/packages
+    volumes: ["${PACKAGES_HOST_DIR:-./dist/packages}:/srv/packages:ro"]      # pacotes (.zip) construídos com `make release`; o painel só lê
     ports: ["${LICENSING_BIND:-127.0.0.1}:${LICENSING_PORT:-8100}:8100"]
     depends_on:
       licensing-db:

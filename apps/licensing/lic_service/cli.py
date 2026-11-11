@@ -29,6 +29,61 @@ def _fmt(dt) -> str:
     return dt.strftime("%d/%m/%Y %H:%M") if dt else "—"
 
 
+def _ask_password() -> str:
+    import getpass
+
+    from lic_service import panel_auth
+
+    pw = getpass.getpass("Senha (12+ caracteres, com minúscula, maiúscula, número e caractere especial): ")
+    if pw != getpass.getpass("Repita a senha: "):
+        raise SystemExit("as senhas não conferem")
+    if errs := panel_auth.policy_errors(pw):
+        raise SystemExit("a senha precisa ter: " + "; ".join(errs))
+    return pw
+
+
+def _admin_commands(a, now) -> None:
+    from sqlalchemy import func
+
+    from lic_service import panel_auth
+    from lic_service.models import Admin
+
+    with session_scope() as s:
+        if a.cmd == "list-admins":
+            for ad in s.execute(select(Admin).order_by(Admin.email)).scalars():
+                print(f"{ad.email:36s} {'ativo' if ad.active else 'inativo':8s} {'com código de 6 dígitos' if ad.totp_secret_enc else 'SEM código de 6 dígitos'}  último acesso {_fmt(ad.last_login_at)}")
+            return
+        email = a.email.strip()
+        existing = s.execute(select(Admin).where(func.lower(Admin.email) == email.lower())).scalar()
+        if a.cmd == "create-admin":
+            if existing is not None:
+                raise SystemExit("já existe uma conta com esse e-mail (use reset-admin)")
+            ad = Admin(email=email, password_hash=panel_auth.hash_password(_ask_password()))
+            secret = None
+            if not a.no_totp:
+                secret = panel_auth.new_totp_secret()
+                ad.totp_secret_enc = panel_auth.encrypt_secret(secret)
+            s.add(ad)
+            s.flush()
+            service.audit(s, "fornecedor", "admin.create", None, admin=str(ad.id), totp=secret is not None)
+        else:
+            if existing is None:
+                raise SystemExit("conta não encontrada")
+            ad = existing
+            ad.password_hash, ad.password_version = panel_auth.hash_password(_ask_password()), ad.password_version + 1      # derruba as sessões abertas
+            ad.failed_logins, ad.locked_until, ad.active = 0, None, True
+            secret = None
+            if a.new_totp:
+                secret = panel_auth.new_totp_secret()
+                ad.totp_secret_enc, ad.last_totp_step = panel_auth.encrypt_secret(secret), None
+            service.audit(s, "fornecedor", "admin.reset", None, admin=str(ad.id), new_totp=secret is not None)
+    print(f"conta {email}: pronta.")
+    if secret:
+        print("\nCadastre no aplicativo autenticador (Google Authenticator, Microsoft Authenticator, 1Password, Authy...). Aparece só agora:")
+        print(f"  chave:  {secret}")
+        print(f"  link:   {panel_auth.otpauth_uri(email, secret)}")
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="python -m lic_service.cli")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -48,6 +103,13 @@ def main(argv: list[str] | None = None) -> None:
     de = sub.add_parser("set-devices"); de.add_argument("--contract", required=True); de.add_argument("--devices", type=int, required=True)  # noqa: E702
     ub = sub.add_parser("unbind", help="desvincula a instalação (troca de servidor); exige novo código"); ub.add_argument("--contract", required=True)  # noqa: E702
     au = sub.add_parser("audit"); au.add_argument("--contract")  # noqa: E702
+    ca = sub.add_parser("create-admin", help="cria uma pessoa que entra no painel web do fornecedor (senha de 12+ caracteres e código de 6 dígitos)")
+    ca.add_argument("--email", required=True)
+    ca.add_argument("--no-totp", action="store_true", help="sem código de 6 dígitos (SÓ desenvolvimento; o painel exige o código por padrão)")
+    ra = sub.add_parser("reset-admin", help="nova senha (e, com --new-totp, novo código de 6 dígitos) de quem entra no painel; desbloqueia a conta")
+    ra.add_argument("--email", required=True)
+    ra.add_argument("--new-totp", action="store_true")
+    sub.add_parser("list-admins", help="lista quem entra no painel do fornecedor")
     a = ap.parse_args(argv)
     now = service.utcnow()
 
@@ -55,6 +117,9 @@ def main(argv: list[str] | None = None) -> None:
         key = generate_signing_key()
         print("LICENSE_SIGNING_KEY=" + base64.b64encode(private_pem(key)).decode())
         print(f"# chave pública (vai no produto do cliente como LICENSE_PUBLIC_KEY): {public_key_b64(key)}", file=sys.stderr)
+        return
+    if a.cmd in ("create-admin", "reset-admin", "list-admins"):
+        _admin_commands(a, now)
         return
     with session_scope() as s:
         if a.cmd == "create-customer":
