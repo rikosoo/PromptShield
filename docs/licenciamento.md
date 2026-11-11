@@ -38,6 +38,13 @@ python -m lic_service.cli issue-code --contract <id> --days 7      # entregue o 
 python -m lic_service.cli contracts                                # todos os contratos, estado e último contato
 ```
 
+## Política semanal e suspensão por falta de validação (2026-11-11)
+
+Além dos prazos abaixo, cada contrato pode ter `warn_after_days` e `suspend_after_days` (assinados na autorização). Contratos novos criados pelo painel usam: validar toda semana, avisar o **cliente**
+após 10 dias sem validar, **suspender a inspeção** após 21 (contados do momento em que a validação era esperada, ou seja, `issued_at` + cadência) e autorização de 28 dias. O estado novo **`suspenso`**
+para a inspeção e bloqueia alterações (consulta e exportação continuam; sensores seguem em falha aberta) e volta sozinho na próxima validação bem-sucedida. Quem acompanha a falha antes do cliente é o
+fornecedor, no painel. Detalhes e operação: `docs/painel-fornecedor.md`. Contratos sem esses campos mantêm a regra antiga.
+
 ## Os dois prazos
 
 | Prazo | Quem define | O que significa |
@@ -58,9 +65,10 @@ O servidor do cliente renova **uma vez por dia** (`renew_after_hours`, padrão 2
 | **Sem contato** | a renovação falhou por rede e já passou 1,5 período; a autorização ainda vale | sim | sim | sim |
 | **Em tolerância** | contrato venceu, dentro da tolerância | sim | sim | sim |
 | **Expirado** | passou a tolerância, ou a autorização local venceu sem renovar | não | sim | sim |
+| **Suspenso** | faltou a validação por mais de `suspend_after_days` (regra acima) | não | **parada** | sim; volta sozinho na próxima validação |
 | **Encerrado** | você encerrou o contrato; a instalação fica sabendo na próxima renovação | não | **conforme `on_end`**: `stop_inspection` (para) ou `keep_inspection` (continua) | sim |
 
-Precedência: não ativado, encerrado, expirado, em tolerância, sem contato, ativo.
+Precedência: não ativado, encerrado, suspenso, expirado, em tolerância, sem contato, ativo.
 
 **O que nenhum estado faz:** apagar dados, bloquear a leitura ou a exportação, ou interromper as ferramentas dos funcionários (os sensores ficam em falha aberta). **Se a inspeção parar, aparece** na faixa do topo do console, na página **Licença**, e nos sensores: a API responde 403 com o cabeçalho `X-PromptShield-Inspection: stopped`, o hook imprime "inspeção PARADA pela licença ou contrato da empresa" e a extensão mostra o aviso no indicador. Nos dois casos o trabalho da pessoa segue, mesmo em modo de falha fechado.
 
@@ -134,4 +142,7 @@ Foi verificado que removendo de propósito a trava de uso único, o nonce ou o b
 
 ## O que não existe ainda
 
-Painel web do fornecedor (hoje é a CLI), aviso **por e-mail** (30/15/7 dias antes e no vencimento; a faixa no console nos últimos 30 dias do contrato já existe), cobrança e nota fiscal, assinatura do instalador/executável, vários tenants com um limite de máquinas **compartilhado**, rotação da chave do fornecedor (a instalação fixa uma chave; trocar exigiria aceitar duas), modo totalmente offline (sem nenhuma renovação, com arquivo de licença levado por pendrive), e a revisão jurídica do contrato.
+O painel web do fornecedor passou a existir em 2026-11-11 (`docs/painel-fornecedor.md`). Continuam sem existir:
+
+
+Aviso **por e-mail** (30/15/7 dias antes e no vencimento; a faixa no console nos últimos 30 dias do contrato já existe), cobrança e nota fiscal, assinatura do instalador/executável, vários tenants com um limite de máquinas **compartilhado**, rotação da chave do fornecedor (a instalação fixa uma chave; trocar exigiria aceitar duas), modo totalmente offline (sem nenhuma renovação, com arquivo de licença levado por pendrive), e a revisão jurídica do contrato.

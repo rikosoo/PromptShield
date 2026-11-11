@@ -68,7 +68,7 @@ A detecção é **por regras locais**, sem LLM externo e sem modelo treinado. Me
 
 - Licença por empresa: limite de **máquinas ativas nos últimos 45 dias** e validade (`python -m app.cli set-license`). Só barra novas matrículas.
 - `python -m app.cli tenants` lista as empresas; `suspend --slug X --reason "..."` e `resume --slug X` suspendem e reativam. Suspensa: coletores recusados, console só lê e exporta, nada é apagado, funcionários não são afetados (sensores em falha aberta). O console mostra faixa de aviso (amarela 15 dias antes do vencimento, vermelha depois). Nunca automático. Detalhes e o que falta (cobrança, apagar a empresa, painel): [`docs/operacao.md`](docs/operacao.md).
-- **Licenciamento on-premise** (servidor do cliente): o fornecedor cadastra contrato e gera um **código de ativação** de uso único; o administrador o informa no console (**Licença**); a instalação cria a própria identidade (chave Ed25519), o serviço de licenças vincula o contrato à chave pública dela e devolve uma **autorização assinada**; o worker renova sozinho (por exemplo, uma vez por dia; cada autorização vale poucos dias). Há **dois prazos** (contrato e autorização local; a autorização nunca passa do contrato mais a tolerância) e cinco estados: ativo, sem contato, em tolerância, expirado, encerrado. Nenhum estado apaga dados; se a inspeção parar, console e sensores avisam. Desligado por padrão (`LICENSE_MODE=off`). Desenho, segurança, operação e **como validar**: [`docs/licenciamento.md`](docs/licenciamento.md).
+- **Licenciamento on-premise** (servidor do cliente): o fornecedor cadastra contrato e gera um **código de ativação** de uso único; o administrador o informa no console (**Licença**); a instalação cria a própria identidade (chave Ed25519), o serviço de licenças vincula o contrato à chave pública dela e devolve uma **autorização assinada**; o worker renova sozinho (por exemplo, uma vez por dia; cada autorização vale poucos dias). Há **dois prazos** (contrato e autorização local; a autorização nunca passa do contrato mais a tolerância) e seis estados: ativo, sem contato, em tolerância, expirado, encerrado e **suspenso** (a política semanal avisa o cliente após 10 dias sem validar e suspende a inspeção após 21; volta sozinha na próxima validação). Nenhum estado apaga dados; se a inspeção parar, console e sensores avisam. O fornecedor opera tudo por um **painel web** próprio (contratos, dias restantes, códigos, alertas, auditoria e o **pacote .zip** que entrega ao cliente, com LEIA-ME passo a passo): [`docs/painel-fornecedor.md`](docs/painel-fornecedor.md). Desligado por padrão (`LICENSE_MODE=off`). Desenho, segurança, operação e **como validar**: [`docs/licenciamento.md`](docs/licenciamento.md).
 - Domínio, subdomínio por cliente e executável assinado: [`docs/dominio-e-assinatura.md`](docs/dominio-e-assinatura.md) (nada contratado).
 
 ## Mapa do repositório
@@ -79,7 +79,8 @@ A detecção é **por regras locais**, sem LLM externo e sem modelo treinado. Me
 | `apps/web` | console Next.js (claro por padrão, escuro por alternância); ver o README da pasta |
 | `apps/extension` | extensão Chrome/Edge (EXPERIMENTAL; ver o README da pasta) |
 | `packages/detection` | motor de detecção (biblioteca pura) e scripts de avaliação |
-| `packages/licensing` | licenciamento: assinatura Ed25519, autorização, pedidos da instalação e máquina de estados (biblioteca pura) |
+| `packages/licensing` | licenciamento: assinatura Ed25519 (autorizações e pacotes), pedidos da instalação e máquina de estados (biblioteca pura) |
+| `infra/release` | construtor do pacote .zip do cliente (`make release`), instaladores `.sh`/`.ps1`, Compose e LEIA-ME do cliente |
 | `apps/licensing` | **serviço de licenças do fornecedor** (contratos, códigos, instalações, auditoria, CLI); não vai para o servidor do cliente |
 | `packages/taxonomy` | as 30 categorias |
 | `packages/adapters/claude_code_hook` | sensor: hooks do Claude Code e do GitHub Copilot CLI, instalador, importação do histórico |
@@ -96,6 +97,7 @@ A detecção é **por regras locais**, sem LLM externo e sem modelo treinado. Me
 | [`docs/implantacao-empresa.md`](docs/implantacao-empresa.md) | instalar na empresa inteira (parcial) |
 | [`docs/operacao.md`](docs/operacao.md) | variáveis, backup e restauração, retenção, chaves, suspensão |
 | [`docs/licenciamento.md`](docs/licenciamento.md) | licenciamento on-premise: fluxo, prazos, estados, segurança, operação e validação |
+| [`docs/painel-fornecedor.md`](docs/painel-fornecedor.md) | painel do fornecedor, regra de validação (10 e 21 dias), montar e entregar o pacote do cliente |
 | [`docs/cobranca.md`](docs/cobranca.md) | **proposta** (nada construído): plano de cobrança, linha do tempo de inadimplência, escada de limitação e arquitetura |
 | [`docs/vistoria-seguranca.md`](docs/vistoria-seguranca.md), [`docs/ameacas.md`](docs/ameacas.md) | vistoria (OWASP Top 10:2021), modelo de ameaças |
 | [`docs/lgpd.md`](docs/lgpd.md), [`docs/piloto.md`](docs/piloto.md) | modelos para advogado; piloto de 30 dias |

@@ -1,0 +1,84 @@
+# PromptShield, instalação no servidor do cliente. Gerado pelo pacote {{VERSION}}; configuração em .env (criado pelo instalador).
+# Nunca use "docker compose down -v": apaga o banco e a identidade da licença.
+name: promptshield
+
+services:
+  db:
+    restart: unless-stopped
+    image: postgres:16
+    pull_policy: never          # a imagem vem no pacote (ou já está no servidor); nada é baixado sem você saber
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-promptshield}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-promptshield}
+    volumes: ["pgdata:/var/lib/postgresql/data"]      # o banco NÃO é exposto fora do servidor (sem "ports")
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-promptshield}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    restart: unless-stopped
+    image: promptshield/api:${PS_VERSION:?defina no .env}
+    pull_policy: never
+    build: { context: ./fontes, dockerfile: apps/api/Dockerfile }       # só é usado se o pacote veio sem imagens (constrói aqui, precisa de internet)
+    environment:
+      DATABASE_URL: postgresql+psycopg://promptshield_app:${APP_DB_PASSWORD:?defina no .env}@db:5432/${POSTGRES_DB:-promptshield}
+      ADMIN_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptshield}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-promptshield}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      OIDC_MODE: "off"
+      LOCAL_AUTH: "true"                                   # login do console com e-mail e senha
+      LOCAL_AUTH_SECRET: ${LOCAL_AUTH_SECRET:?defina no .env}
+      ORIGINAL_TEXT_MASTER_KEY: ${ORIGINAL_TEXT_MASTER_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      CONSOLE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      LICENSE_MODE: onprem                                 # licença validada com o fornecedor (veja o LEIA-ME)
+      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:?defina no .env}
+      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:?defina no .env}
+    volumes: ["licensedata:/var/lib/promptshield"]         # identidade desta instalação: PRECISA persistir e entrar no backup
+    ports: ["${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    restart: unless-stopped
+    image: promptshield/api:${PS_VERSION:?defina no .env}
+    pull_policy: never
+    build: { context: ./fontes, dockerfile: apps/api/Dockerfile }
+    command: ["python", "-m", "app.worker"]               # alertas, relatórios agendados e a validação semanal da licença
+    environment:
+      DATABASE_URL: postgresql+psycopg://promptshield_app:${APP_DB_PASSWORD:?defina no .env}@db:5432/${POSTGRES_DB:-promptshield}
+      ORIGINAL_TEXT_MASTER_KEY: ${ORIGINAL_TEXT_MASTER_KEY:-}
+      CONSOLE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      LICENSE_MODE: onprem
+      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:?defina no .env}
+      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:?defina no .env}
+    volumes: ["licensedata:/var/lib/promptshield"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    restart: unless-stopped
+    image: promptshield/web:${PS_VERSION:?defina no .env}
+    pull_policy: never
+    build: ./fontes/apps/web
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      AUTH_MODE: local
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+    ports: ["${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  licensedata:
+  pgdata:

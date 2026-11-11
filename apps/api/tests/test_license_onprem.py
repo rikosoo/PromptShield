@@ -38,12 +38,13 @@ class Lic:
     def __init__(self, clock: Clock, vendor_key, tmp_path, factory_log: list) -> None:
         self.clock, self.vendor_key, self.dir, self.calls = clock, vendor_key, tmp_path, factory_log
 
-    def new_code(self, devices=100, months=12, tolerance_days=15, on_end="stop_inspection", code_days=7) -> str:
+    def new_code(self, devices=100, months=12, tolerance_days=15, on_end="stop_inspection", code_days=7, weekly=False) -> str:
         from lic_service import service
         from lic_service.db import session_scope
 
         with session_scope() as s:
-            k = service.create_contract(s, service.create_customer(s, "Acme Ltda"), devices, months, tolerance_days=tolerance_days, on_end=on_end)
+            make = service.create_weekly_contract if weekly else service.create_contract       # weekly: validação semanal, aviso em 10 dias, suspensão em 21
+            k = make(s, service.create_customer(s, "Acme Ltda"), devices, months, tolerance_days=tolerance_days, on_end=on_end)
             self.contract_id = str(k.id)
             return service.issue_code(s, k, self.clock.now, code_days)
 
@@ -225,6 +226,43 @@ def test_vendor_outage_keeps_working_warns_then_expires_without_stopping_inspect
     license_client.invalidate()
     assert status(client, world)["state"] == "ativo"
     assert client.post("/v1/enroll", json={"token": tok, "hostname": "NB-1", "os": "windows", "tools": []}).status_code == 201
+
+
+def test_weekly_policy_warns_the_customer_after_10_days_suspends_after_21_and_heals_by_itself(client, world, lic):
+    from app import license_client
+
+    activate(client, world, lic, weekly=True)
+    real = license_client.http_factory
+    license_client.http_factory = lambda: Stub(down)                                   # o servidor do fornecedor some a partir da primeira validação semanal
+    assert license_client.renew_if_due(lic.clock.to(days=7, hours=1)) == "falhou:unreachable"
+    lic.clock.to(days=16)
+    license_client.invalidate()
+    st = status(client, world)
+    assert st["state"] == "ativo" and st["inspecting"] and ingest(client, world).status_code == 200      # 9 dias de atraso: o CLIENTE ainda não é avisado
+    lic.clock.to(days=17)
+    license_client.invalidate()
+    st = status(client, world)
+    assert (st["state"], st["inspecting"], st["can_enroll"], st["days_left"]) == ("sem_contato", True, True, 11)
+    assert "suspensa em 11 dia(s)" in st["message"] and ingest(client, world).status_code == 200     # avisado, mas tudo funciona
+    lic.clock.to(days=27, hours=23)
+    license_client.invalidate()
+    assert status(client, world)["state"] == "sem_contato"
+    lic.clock.to(days=28)
+    license_client.invalidate()
+    st = status(client, world)
+    assert (st["state"], st["inspecting"], st["can_enroll"]) == ("suspenso", False, False) and "SUSPENSA" in st["message"]
+    r = ingest(client, world)                                                          # a inspeção PARA (o sensor segue em falha aberta: o funcionário não é afetado)
+    assert r.status_code == 403 and r.headers["x-promptshield-inspection"] == "stopped"
+    assert client.get("/v1/events", headers=world.user("leitura")).status_code == 200                        # consulta continua
+    assert client.get("/v1/events/export.csv", params={"days": 30}, headers=world.user("auditor")).status_code == 200   # exportação continua
+    assert client.patch("/v1/tenant", json={"retention_days": 30}, headers=admin(world)).status_code == 403        # alterações bloqueadas
+    assert world.sql("SELECT count(*) FROM events").scalar() == 2                                            # nada foi apagado
+    # o servidor volta: a validação seguinte restaura tudo sozinha (a autorização nova zera a contagem)
+    license_client.http_factory = real
+    assert license_client.renew_if_due(lic.clock.to(days=29)) == "renovado"
+    license_client.invalidate()
+    st = status(client, world)
+    assert st["state"] == "ativo" and st["inspecting"] and ingest(client, world).status_code == 200
 
 
 # ---------- contrato vs autorização ----------

@@ -1,4 +1,4 @@
-.PHONY: up down test lint setup ner test-e2e test-e2e-web audit
+.PHONY: up down test lint setup ner test-e2e test-e2e-web audit release
 
 PY ?= python3
 
@@ -53,3 +53,7 @@ audit: .venv apps/web/node_modules apps/extension/node_modules ## varredura de d
 	.venv/bin/pip install -q pip-audit && .venv/bin/pip-audit --skip-editable
 	cd apps/web && npm audit --omit=dev --audit-level=high
 	cd apps/extension && npm audit --omit=dev --audit-level=high
+
+release: ## pacote do cliente assinado: make release VERSION=0.4.0 LICENSE_URL=https://licencas.seudominio.com.br  (exige LICENSE_SIGNING_KEY e Docker)
+	@test -n "$(VERSION)" -a -n "$(LICENSE_URL)" || (echo "use: make release VERSION=0.4.0 LICENSE_URL=https://..." && exit 2)
+	.venv/bin/python infra/release/build_package.py --version "$(VERSION)" --license-url "$(LICENSE_URL)" --with-images
