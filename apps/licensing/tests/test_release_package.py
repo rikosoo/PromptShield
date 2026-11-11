@@ -98,6 +98,18 @@ def test_source_mode_ships_sources_without_junk(tmp_path):
     n = names(res["zip"])
     assert any(x.endswith("fontes/apps/api/Dockerfile") for x in n) and any(x.endswith("fontes/packages/detection/pyproject.toml") for x in n)
     assert not any("node_modules" in x or "__pycache__" in x or ".pyc" in x or "/.venv/" in x or "test-results" in x for x in n)
+    assert not any("/tests/" in x for x in n)                                              # testes ficam de fora (alguns citam o serviço do fornecedor)
+
+
+def test_the_package_never_contains_the_vendor_service_or_panel_or_secrets(tmp_path):
+    """O painel e o serviço de licenças são SÓ do fornecedor: o que o cliente recebe não os leva, nem as chaves e segredos."""
+    res = make(tmp_path, with_source=True)
+    with zipfile.ZipFile(res["zip"]) as z:
+        n = z.namelist()
+        assert not any("lic_service" in x or "apps/licensing" in x or "/templates/dashboard" in x or "/templates/contract.html" in x for x in n)
+        text = b"".join(z.read(x) for x in n if x.endswith((".py", ".yml", ".sh", ".ps1", ".md", ".example", ".json", ".ts", ".tsx", ".toml", "Dockerfile")))
+    for secret in (b"LICENSE_SIGNING_KEY", b"PANEL_SECRET", b"PANEL_ENABLED", b"lic_service", KEY_B64.encode()):
+        assert secret not in text, secret
 
 
 # ---------------------------------------------------------------- Compose do cliente

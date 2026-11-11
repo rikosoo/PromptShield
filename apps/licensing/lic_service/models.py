@@ -5,7 +5,21 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, Uuid, func
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -85,6 +99,8 @@ class Installation(Base):
     unbound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_device_count: Mapped[int | None] = mapped_column(Integer)
+    rules_version: Mapped[str | None] = mapped_column(String(40))          # pacote de regras ativo no cliente (informado na validação)
+    update_state: Mapped[str | None] = mapped_column(String(300))          # estado das atualizações no cliente, em texto curto (informado na validação)
 
 
 class IssuedAuthorization(Base):
@@ -99,6 +115,26 @@ class IssuedAuthorization(Base):
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     auth_expires: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     token_sha256: Mapped[str] = mapped_column(String(64))
+
+
+class Release(Base):
+    """Uma versão PUBLICADA para os clientes: `app` (pacote de instalação) ou `rules` (pacote de regras de detecção). Só se publica o que está assinado e confere."""
+
+    __tablename__ = "lic_releases"
+    __table_args__ = (UniqueConstraint("kind", "version", name="uq_lic_release_version"), CheckConstraint("kind IN ('app','rules')", name="ck_lic_release_kind"))
+    id: Mapped[uuid.UUID] = _pk()
+    kind: Mapped[str] = mapped_column(String(8))
+    version: Mapped[str] = mapped_column(String(40))
+    file_name: Mapped[str] = mapped_column(String(120))
+    sha256: Mapped[str] = mapped_column(String(64))
+    size: Mapped[int] = mapped_column(BigInteger)
+    signature: Mapped[str] = mapped_column(Text)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    security: Mapped[bool] = mapped_column(Boolean, default=False)       # correção de segurança: o cliente é avisado com destaque
+    published_by: Mapped[str] = mapped_column(String(320))
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawn_reason: Mapped[str | None] = mapped_column(String(300))
 
 
 class Admin(Base):

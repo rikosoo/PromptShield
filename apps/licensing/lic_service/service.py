@@ -15,13 +15,24 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from promptshield_licensing import AuthorizationError, RequestError, b64d, issue_authorization, verify_request
+from promptshield_licensing import (
+    AuthorizationError,
+    ReleaseError,
+    RequestError,
+    b64d,
+    is_newer,
+    issue_authorization,
+    issue_notice,
+    parse_version,
+    verify_request,
+)
 from promptshield_licensing.authorization import check_silence_rule
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.orm import Session
 
-from lic_service.models import ActivationCode, AuditEntry, Contract, Customer, Installation, IssuedAuthorization, Nonce
+from lic_service import packages
+from lic_service.models import ActivationCode, AuditEntry, Contract, Customer, Installation, IssuedAuthorization, Nonce, Release
 
 CODE_PREFIX = "psa_"
 # política SEMANAL recomendada (decidida pelo dono em 2026-11-11): valida toda semana; se uma validação falhar, o fornecedor vê na hora (painel), o cliente é
@@ -306,9 +317,109 @@ def renew(s: Session, key: Ed25519PrivateKey, token: str, now: datetime) -> str:
     inst.last_seen_at = now
     inst.last_device_count = count if isinstance(count, int) and 0 <= count <= 10_000_000 else inst.last_device_count
     inst.product_version = str(body.get("version") or inst.product_version or "")[:40] or None
+    inst.rules_version = str(body.get("rules_version") or "")[:40] or None
+    inst.update_state = str(body.get("update_state") or "")[:300] or None
     out = _issue(s, key, contract, inst, "renewal", now)
     audit(s, inst.installation_id, "installation.renew", contract.id, device_count=inst.last_device_count, contract_status=contract.status)
     return out
+
+
+# ---------------- versões publicadas, avisos e download ----------------
+def _release_row(s: Session, kind: str, version: str) -> Release | None:
+    return s.execute(select(Release).where(Release.kind == kind, Release.version == version)).scalar()
+
+
+def publish_release(s: Session, kind: str, file_name: str, notes: str, security: bool, now: datetime, *, actor: str = "fornecedor") -> Release:
+    """Publica um pacote que está na pasta de pacotes: assinado, com o SHA-256 conferindo e com versão MAIOR que todas as já publicadas (retiradas inclusive)."""
+    if kind not in packages.KINDS:
+        raise ServiceError("bad_kind", "tipo de versão desconhecido")
+    pkg = packages.find(file_name, kind)
+    if pkg is None:
+        raise ServiceError("package_not_found", "pacote não encontrado na pasta de pacotes")
+    if not pkg.trusted:
+        raise ServiceError("package_untrusted", "o pacote não confere com o manifesto assinado (foi alterado ou a assinatura falha): não publicado")
+    try:
+        parse_version(pkg.version)
+    except ReleaseError as exc:
+        raise ServiceError("bad_version", str(exc)) from exc
+    if _release_row(s, kind, pkg.version) is not None:
+        raise ServiceError("already_published", f"a versão {pkg.version} já foi publicada")
+    newest = s.execute(select(Release.version).where(Release.kind == kind)).scalars().all()
+    if any(not is_newer(pkg.version, v) for v in newest):
+        raise ServiceError("not_newer", "a versão precisa ser MAIOR que todas as já publicadas (nunca se oferece uma versão anterior)")
+    rel = Release(kind=kind, version=pkg.version, file_name=pkg.name, sha256=pkg.sha256, size=pkg.size, signature=pkg.signature, notes=notes.strip()[:1000],
+                  security=bool(security), published_by=actor, published_at=now)
+    s.add(rel)
+    s.flush()
+    audit(s, actor, "release.publish", None, kind=kind, version=pkg.version, sha256=pkg.sha256, security=bool(security))
+    return rel
+
+
+def withdraw_release(s: Session, release: Release, reason: str, now: datetime, *, actor: str = "fornecedor") -> None:
+    """Retira uma versão (os clientes deixam de ser avisados dela na próxima validação). Quem já baixou não perde nada."""
+    if release.withdrawn_at is not None:
+        raise ServiceError("already_withdrawn", "esta versão já foi retirada")
+    if len(reason.strip()) < 3:
+        raise ServiceError("reason_required", "informe o motivo")
+    release.withdrawn_at, release.withdrawn_reason = now, reason.strip()[:300]
+    audit(s, actor, "release.withdraw", None, kind=release.kind, version=release.version, reason=reason.strip()[:300])
+
+
+def latest_release(s: Session, kind: str) -> Release | None:
+    rows = s.execute(select(Release).where(Release.kind == kind, Release.withdrawn_at.is_(None))).scalars().all()
+    return max(rows, key=lambda r: parse_version(r.version), default=None)
+
+
+def notices(s: Session, key: Ed25519PrivateKey, contract: Contract) -> dict[str, str | None]:
+    """Avisos assinados que vão junto com a validação. Contrato que não está ativo não recebe avisos. Falha ao montar um aviso nunca derruba a validação."""
+    out: dict[str, str | None] = {"app": None, "rules": None}
+    if contract.status != "ativo":
+        return out
+    for kind in out:
+        rel = latest_release(s, kind)
+        if rel is None:
+            continue
+        try:
+            out[kind] = issue_notice(key, kind=kind, version=rel.version, sha256=rel.sha256, size=int(rel.size), security=rel.security, notes=rel.notes,   # type: ignore[arg-type]
+                                     published_at=rel.published_at, package_signature=rel.signature, file=rel.file_name)
+        except ReleaseError:
+            continue
+    return out
+
+
+def renew_with_notices(s: Session, key: Ed25519PrivateKey, token: str, now: datetime) -> dict[str, Any]:
+    auth_token = renew(s, key, token, now)
+    iid = _peek_installation_id(token)
+    inst = s.execute(select(Installation).where(Installation.installation_id == iid, Installation.unbound_at.is_(None))).scalar()
+    contract = s.get(Contract, inst.contract_id) if inst else None
+    return {"authorization": auth_token, "releases": notices(s, key, contract) if contract is not None else {}}
+
+
+def authorize_download(s: Session, token: str, now: datetime) -> tuple[Release, Any]:
+    """Pedido assinado pela instalação: devolve a versão e o caminho do arquivo. Só para instalação conhecida com contrato ATIVO, só versão publicada e
+    não retirada, e só se o arquivo na pasta ainda confere com o manifesto assinado."""
+    iid = _peek_installation_id(token)
+    inst = s.execute(select(Installation).where(Installation.installation_id == iid, Installation.unbound_at.is_(None)).with_for_update()).scalar() if iid else None
+    if inst is None:
+        raise ServiceError("unknown_installation", "instalação não reconhecida", 403)
+    try:
+        body = verify_request(token, now, expected_public_key=inst.public_key)
+    except RequestError as exc:
+        raise ServiceError("invalid_request", str(exc)) from exc
+    if body.get("typ") != "download" or body.get("kind") not in packages.KINDS or not isinstance(body.get("version"), str):
+        raise ServiceError("invalid_request", "pedido de download malformado")
+    _consume_nonce(s, body["nonce"], now)
+    contract = s.get(Contract, inst.contract_id)
+    if contract is None or contract.status != "ativo":
+        raise ServiceError("contract_not_active", "contrato não está ativo", 403)
+    rel = _release_row(s, body["kind"], body["version"])
+    if rel is None or rel.withdrawn_at is not None:
+        raise ServiceError("release_not_available", "versão não disponível", 404)
+    pkg = packages.find(rel.file_name, rel.kind)
+    if pkg is None or not pkg.trusted or pkg.sha256 != rel.sha256:
+        raise ServiceError("package_untrusted", "o arquivo no servidor não confere com o publicado; fale com o fornecedor", 503)
+    audit(s, inst.installation_id, "release.download", contract.id, kind=rel.kind, version=rel.version)
+    return rel, packages.file_path(pkg)
 
 
 def record_refusal(s: Session, action: str, code: str, **detail: Any) -> None:
@@ -342,6 +453,7 @@ def overview(s: Session, now: datetime) -> list[dict[str, Any]]:
     valid_code = {r[0]: r[1] for r in s.execute(select(ActivationCode.contract_id, func.max(ActivationCode.expires_at))
                                                 .where(ActivationCode.used_at.is_(None), ActivationCode.expires_at > now).group_by(ActivationCode.contract_id)).all()}
     out: list[dict[str, Any]] = []
+    latest_app = latest_release(s, "app")
     for k, customer in contracts:
         inst = insts.get(k.id)
         la = last.get(k.id)
@@ -366,6 +478,16 @@ def overview(s: Session, now: datetime) -> list[dict[str, Any]]:
             alerts.append((LEVEL_CRIT if tol_left < 0 else LEVEL_HIGH, "Contrato VENCIDO" + (f", tolerância por mais {tol_left} dia(s)" if tol_left >= 0 else " e fora da tolerância")))
         elif dl is not None and dl <= NEAR_END_DAYS:
             alerts.append((LEVEL_WARN, f"Vence em {dl} dia(s): hora de renovar"))
+        outdated = False
+        if inst is not None and inst.product_version and latest_app is not None and k.status == "ativo":
+            try:
+                outdated = is_newer(latest_app.version, inst.product_version)
+            except ReleaseError:
+                outdated = False
+        if outdated:
+            state = f" Situação no cliente: {inst.update_state}." if inst.update_state else ""
+            alerts.append((LEVEL_HIGH if latest_app.security else LEVEL_WARN,                                    # type: ignore[union-attr]
+                           f"Versão {inst.product_version} instalada; a {latest_app.version} está publicada" + (" (CORREÇÃO DE SEGURANÇA)" if latest_app.security else "") + "." + state))   # type: ignore[union-attr]
         used = inst.last_device_count if inst else None
         if used is not None and k.max_devices and used > k.max_devices:
             alerts.append((LEVEL_WARN, f"{used} máquinas em uso para um limite de {k.max_devices}: proponha o ajuste"))
@@ -373,7 +495,8 @@ def overview(s: Session, now: datetime) -> list[dict[str, Any]]:
             alerts.append((LEVEL_WARN, "Ainda não ativado e sem código válido: gere um código novo"))
         out.append({"id": k.id, "customer": customer, "status": k.status, "devices_max": k.max_devices, "devices_used": used, "ends_at": k.ends_at,
                     "days_left": dl, "last_seen_at": inst.last_seen_at if inst else None, "last_issued_at": la.issued_at if la else None,
-                    "version": inst.product_version if inst else None, "hostname": inst.hostname if inst else None, "has_installation": inst is not None,
+                    "version": inst.product_version if inst else None, "rules_version": inst.rules_version if inst else None, "update_state": inst.update_state if inst else None,
+                    "outdated": outdated, "hostname": inst.hostname if inst else None, "has_installation": inst is not None,
                     "overdue": od, "silence": silence, "alerts": sorted(alerts, reverse=True), "level": max((a[0] for a in alerts), default=LEVEL_OK),
                     "code_valid_until": valid_code.get(k.id), "warn_after_days": k.warn_after_days, "suspend_after_days": k.suspend_after_days,
                     "renew_after_hours": k.renew_after_hours})

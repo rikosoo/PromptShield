@@ -357,3 +357,56 @@ def test_no_signing_key_means_no_download(panel, tmp_path, vendor_key, monkeypat
     page = panel.get("/painel/downloads").text
     assert "LICENSE_SIGNING_KEY" in page and f'href="/painel/downloads/{name}"' not in page
     assert panel.get(f"/painel/downloads/{name}").status_code == 303
+
+
+# ---------------------------------------------------------------- versões publicadas
+def test_versions_page_publishes_only_with_confirmation_and_audits_with_the_admin_email(panel, tmp_path, vendor_key):
+    from test_releases import app_package, rules_package
+    login(panel)
+    assert "Nenhum pacote na pasta" in panel.get("/painel/versoes").text
+    name, _ = app_package(tmp_path, vendor_key, "0.4.0")
+    rname, _ = rules_package(tmp_path, vendor_key, "2026.11.1")
+    page = panel.get("/painel/versoes").text
+    assert name in page and rname in page and "não publicada" in page and "assinatura confere" in page
+    sem_confirmar = post(panel, "/painel/versoes/publicar", {"kind": "app", "file": name, "notes": "x"})
+    assert sem_confirmar.status_code == 303
+    with session_scope() as s:
+        assert s.execute(text("SELECT count(*) FROM lic_releases")).scalar() == 0                      # sem a caixa, nada é publicado
+    assert post(panel, "/painel/versoes/publicar", {"kind": "app", "file": name, "notes": "Corrige X", "security": "sim", "confirm": "sim"}).status_code == 303
+    assert post(panel, "/painel/versoes/publicar", {"kind": "rules", "file": rname, "notes": "Regras novas", "confirm": "sim"}).status_code == 303
+    page = panel.get("/painel/versoes").text
+    assert page.count("publicada") >= 2 and "segurança" in page and "Corrige X" in page and f"por {EMAIL}" in page
+    with session_scope() as s:
+        rows = s.execute(text("SELECT kind, version, security FROM lic_releases ORDER BY kind")).all()
+        actors = {e.actor for e in s.execute(select(AuditEntry).where(AuditEntry.action == "release.publish")).scalars()}
+    assert [tuple(r) for r in rows] == [("app", "0.4.0", True), ("rules", "2026.11.1", False)] and actors == {EMAIL}
+    rid = re.search(r'/painel/versoes/([0-9a-f-]{36})/retirar', page).group(1)
+    assert post(panel, f"/painel/versoes/{rid}/retirar", {"reason": " "}).status_code == 303
+    assert post(panel, f"/painel/versoes/{rid}/retirar", {"reason": "regressão"}).status_code == 303
+    assert "retirada" in panel.get("/painel/versoes").text
+    for path in ("/painel/versoes/publicar", f"/painel/versoes/{rid}/retirar"):
+        assert panel.post(path, data={"csrf": "errado"}, headers=H).status_code == 403                      # CSRF também vale aqui
+
+
+def test_dashboard_flags_outdated_installations_and_security_ones_louder(panel, tmp_path, vendor_key):
+    from test_releases import app_package
+    login(panel)
+    cid = new_contract(panel)
+    inst = activate_contract(cid, vendor_key)
+    with session_scope() as s:
+        s.execute(text("UPDATE lic_installations SET product_version = '0.3.0', update_state = 'app:ready(0.4.0)', last_seen_at = now()"))
+        s.execute(text("UPDATE lic_authorizations SET issued_at = now()"))
+    name, _ = app_package(tmp_path, vendor_key, "0.4.0")
+    with session_scope() as s:
+        service.publish_release(s, "app", name, "", False, service.utcnow(), actor=EMAIL)
+    page = panel.get("/painel/visao-geral").text
+    assert "Versão 0.3.0 instalada; a 0.4.0 está publicada." in page and "app:ready(0.4.0)" in page and "CORREÇÃO DE SEGURANÇA" not in page
+    name2, _ = app_package(tmp_path, vendor_key, "0.4.1")
+    with session_scope() as s:
+        service.publish_release(s, "app", name2, "grave", True, service.utcnow(), actor=EMAIL)
+    page = panel.get("/painel/visao-geral").text
+    assert "a 0.4.1 está publicada (CORREÇÃO DE SEGURANÇA)" in page and "lv2" in page
+    with session_scope() as s:
+        s.execute(text("UPDATE lic_installations SET product_version = '0.4.1'"))
+    assert "está publicada" not in panel.get("/painel/visao-geral").text                                    # atualizou: o alerta some
+    assert inst is not None

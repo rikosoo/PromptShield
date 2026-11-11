@@ -34,7 +34,7 @@ TEMPLATES = HERE / "templates"
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)?$")
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)         # zip reproduzível
 SOURCE_DIRS = ("packages", "apps/api", "apps/web", "apps/extension")
-SOURCE_EXCLUDE = {"node_modules", ".next", "__pycache__", ".pytest_cache", "test-results", ".venv", "dist", "playwright-report", ".ruff_cache", "tsconfig.tsbuildinfo"}
+SOURCE_EXCLUDE = {"tests", "node_modules", ".next", "__pycache__", ".pytest_cache", "test-results", ".venv", "dist", "playwright-report", ".ruff_cache", "tsconfig.tsbuildinfo"}
 EXECUTABLE = {"instalar.sh", "backup.sh"}
 
 

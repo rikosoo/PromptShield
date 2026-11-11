@@ -20,7 +20,7 @@ from sqlalchemy import func, select
 from lic_service import packages, panel_auth, service
 from lic_service.config import settings
 from lic_service.db import session_scope
-from lic_service.models import ActivationCode, Admin, AuditEntry, Contract, Customer, Installation, IssuedAuthorization
+from lic_service.models import ActivationCode, Admin, AuditEntry, Contract, Customer, Installation, IssuedAuthorization, Release
 
 router = APIRouter(prefix="/painel", include_in_schema=False)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -426,3 +426,59 @@ def audit_page(request: Request, contrato: str = "") -> Response:
         for e in entries:
             s.expunge(e)
     return _render(request, "audit.html", auth, nav="auditoria", entries=entries, contrato=contrato)
+
+
+# ---------------------------------------------------------------- versões publicadas (aplicação e pacotes de regras)
+@router.get("/versoes", response_class=HTMLResponse)
+def versions_page(request: Request) -> Response:
+    auth = _auth(request)
+    now = service.utcnow()
+    with session_scope() as s:
+        rels = {(r.kind, r.version): r for r in s.execute(select(Release)).scalars()}
+        for r in rels.values():
+            s.expunge(r)
+        latest = {k: service.latest_release(s, k) for k in ("app", "rules")}
+        latest_ver = {k: (v.version if v else None) for k, v in latest.items()}
+        rows = service.overview(s, now)
+    groups = []
+    for kind, title in (("app", "Aplicação (pacote de instalação)"), ("rules", "Pacotes de regras de detecção")):
+        items = []
+        for p in packages.list_packages(kind):
+            items.append({"pkg": p, "rel": rels.get((kind, p.version))})
+        published_only = [r for (k, _), r in rels.items() if k == kind and not any(i["pkg"].version == r.version for i in items)]
+        groups.append({"kind": kind, "title": title, "items": items, "orphans": published_only, "latest": latest_ver[kind]})
+    installs = [{"customer": r["customer"], "id": r["id"], "version": r["version"], "rules_version": r["rules_version"], "update_state": r["update_state"], "outdated": r["outdated"]} for r in rows if r["has_installation"]]
+    return _render(request, "versions.html", auth, nav="versoes", groups=groups, installs=installs, signing_ready=packages._public_key() is not None)
+
+
+@router.post("/versoes/publicar")
+def versions_publish(request: Request, csrf: str = Form(""), kind: str = Form(""), file: str = Form(""), notes: str = Form(""), security: str = Form(""), confirm: str = Form("")) -> Response:
+    auth = _auth(request)
+    _check(request, auth, csrf)
+    if confirm != "sim":
+        return _flash(RedirectResponse("/painel/versoes", 303), "Marque a caixa de confirmação para publicar.", False)
+    try:
+        with session_scope() as s:
+            rel = service.publish_release(s, kind, file, notes, security == "sim", service.utcnow(), actor=auth.email)
+            version = rel.version
+    except service.ServiceError as exc:
+        return _flash(RedirectResponse("/painel/versoes", 303), exc.detail, False)
+    return _flash(RedirectResponse("/painel/versoes", 303), f"Versão {version} publicada. Cada instalação é avisada na próxima validação (até 7 dias, na política semanal).")
+
+
+@router.post("/versoes/{rid}/retirar")
+def versions_withdraw(request: Request, rid: str, csrf: str = Form(""), reason: str = Form("")) -> Response:
+    auth = _auth(request)
+    _check(request, auth, csrf)
+    try:
+        with session_scope() as s:
+            try:
+                rel = s.get(Release, uuid.UUID(rid))
+            except ValueError:
+                rel = None
+            if rel is None:
+                raise HTTPException(404, "versão não encontrada")
+            service.withdraw_release(s, rel, reason, service.utcnow(), actor=auth.email)
+    except service.ServiceError as exc:
+        return _flash(RedirectResponse("/painel/versoes", 303), exc.detail, False)
+    return _flash(RedirectResponse("/painel/versoes", 303), "Versão retirada: os clientes deixam de ser avisados dela. Quem já baixou não perde nada.")

@@ -55,6 +55,7 @@ form.inline { display:inline; }
     <a href="/painel/visao-geral" {% if nav == 'visao' %}aria-current="page"{% endif %}>Visão geral</a>
     <a href="/painel/clientes/novo" {% if nav == 'novo' %}aria-current="page"{% endif %}>Novo cliente</a>
     <a href="/painel/downloads" {% if nav == 'downloads' %}aria-current="page"{% endif %}>Pacotes e instalador</a>
+    <a href="/painel/versoes" {% if nav == 'versoes' %}aria-current="page"{% endif %}>Versões</a>
     <a href="/painel/auditoria" {% if nav == 'auditoria' %}aria-current="page"{% endif %}>Auditoria</a>
   </nav>
   <div class="who"><span>{{ auth.email }}</span><a href="/painel/senha">Senha</a>

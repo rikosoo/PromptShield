@@ -10,11 +10,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from promptshield_licensing import load_private_key, sha256_file, verify_package
+from promptshield_licensing import RULES_PRODUCT, load_private_key, sha256_file, verify_package
+from promptshield_licensing.packages import PACKAGE_PRODUCT
 
 from lic_service.config import settings
 
-NAME_RE = re.compile(r"^promptshield-onprem-[0-9A-Za-z][0-9A-Za-z._-]{0,40}\.zip$")
+NAME_RE = re.compile(r"^promptshield-onprem-[0-9A-Za-z][0-9A-Za-z._-]{0,40}\.zip$")                 # pacote de instalação (aplicação)
+RULES_NAME_RE = re.compile(r"^promptshield-rules-[0-9A-Za-z][0-9A-Za-z._-]{0,40}\.pack$")           # pacote de regras de detecção
+KINDS = {"app": (NAME_RE, "promptshield-onprem-*.zip", PACKAGE_PRODUCT), "rules": (RULES_NAME_RE, "promptshield-rules-*.pack", RULES_PRODUCT)}
 
 
 @dataclass(frozen=True)
@@ -24,9 +27,11 @@ class Package:
     size: int
     sha256: str
     built_at: str | None
-    signature_ok: bool          # a assinatura do manifesto confere com a chave do fornecedor
     hash_ok: bool               # o arquivo na pasta ainda tem o SHA-256 do manifesto (não foi trocado depois)
     has_readme: bool
+    signature: str = ""
+    kind: str = "app"           # app | rules
+    signature_ok: bool = False  # a assinatura do manifesto confere com a chave do fornecedor
 
     @property
     def trusted(self) -> bool:
@@ -46,29 +51,31 @@ def packages_dir() -> Path:
     return Path(settings.packages_dir)
 
 
-def list_packages(verify_hash: bool = True) -> list[Package]:
+def list_packages(kind: str = "app", verify_hash: bool = True) -> list[Package]:
     d = packages_dir()
-    if not d.is_dir():
+    if kind not in KINDS or not d.is_dir():
         return []
+    name_re, pattern, product = KINDS[kind]
     pub = _public_key()
     out: list[Package] = []
-    for zf in sorted(d.glob("promptshield-onprem-*.zip"), reverse=True):
-        if not NAME_RE.match(zf.name) or not zf.is_file():
+    for zf in sorted(d.glob(pattern), reverse=True):
+        if not name_re.match(zf.name) or not zf.is_file():
             continue
         try:
             m = json.loads((d / f"{zf.name}.manifest.json").read_text(encoding="utf-8"))
             version, digest, sig = str(m["version"]), str(m["sha256"]), str(m["signature"])
         except (OSError, ValueError, KeyError, TypeError):
             continue                                                  # sem manifesto legível: não é oferecido
-        sig_ok = pub is not None and verify_package(pub, version, digest, sig)
+        sig_ok = pub is not None and verify_package(pub, version, digest, sig, product)
         hash_ok = (sha256_file(zf) == digest) if verify_hash else True
-        out.append(Package(zf.name, version, zf.stat().st_size, digest, m.get("built_at"), sig_ok, hash_ok, (d / f"{zf.name[:-4]}.README.md").is_file()))
+        readme = d / f"{zf.name.rsplit('.', 1)[0]}.README.md"
+        out.append(Package(zf.name, version, zf.stat().st_size, digest, m.get("built_at"), hash_ok, readme.is_file(), sig, kind, sig_ok))
     return out
 
 
-def find(name: str) -> Package | None:
+def find(name: str, kind: str = "app") -> Package | None:
     """Só devolve um pacote que ESTÁ na lista (nada de montar caminho a partir do que veio na URL)."""
-    return next((p for p in list_packages(verify_hash=True) if p.name == name), None)
+    return next((p for p in list_packages(kind, verify_hash=True) if p.name == name), None)
 
 
 def file_path(pkg: Package) -> Path:
@@ -76,7 +83,7 @@ def file_path(pkg: Package) -> Path:
 
 
 def readme_text(pkg: Package) -> str | None:
-    f = packages_dir() / f"{pkg.name[:-4]}.README.md"
+    f = packages_dir() / f"{pkg.name.rsplit('.', 1)[0]}.README.md"
     try:
         return f.read_text(encoding="utf-8") if pkg.has_readme else None
     except OSError:

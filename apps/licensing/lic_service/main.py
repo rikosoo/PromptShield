@@ -6,7 +6,7 @@ import time
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from promptshield_licensing import SignatureError, fingerprint, load_private_key, public_key_b64
 from pydantic import BaseModel, Field
 
@@ -83,6 +83,33 @@ def activate(body: SignedRequest, request: Request) -> JSONResponse:
     return _handle(service.activate, body, request, "activate")
 
 
-@app.post("/v1/renew", summary="Renovação periódica: devolve outra autorização enquanto o contrato permitir")
+@app.post("/v1/renew", summary="Validação periódica: devolve outra autorização (e, se houver, os avisos assinados de versão nova) enquanto o contrato permitir")
 def renew(body: SignedRequest, request: Request) -> JSONResponse:
-    return _handle(service.renew, body, request, "renew")
+    ip = request.client.host if request.client else "?"
+    if _limited(ip):
+        raise HTTPException(429, "muitos pedidos", headers={"Retry-After": "60"})
+    key = _key()
+    try:
+        with session_scope() as s:
+            payload = service.renew_with_notices(s, key, body.request, service.utcnow())
+        return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+    except service.ServiceError as exc:
+        with session_scope() as s:
+            service.record_refusal(s, "renew.refused", exc.code, ip=ip)
+        return JSONResponse({"code": exc.code, "detail": exc.detail}, status_code=exc.http, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/v1/releases/download", summary="Baixa uma versão publicada (pedido assinado pela instalação; só contrato ativo)")
+def download_release(body: SignedRequest, request: Request) -> Response:
+    ip = request.client.host if request.client else "?"
+    if _limited(ip):
+        raise HTTPException(429, "muitos pedidos", headers={"Retry-After": "60"})
+    try:
+        with session_scope() as s:
+            rel, path = service.authorize_download(s, body.request, service.utcnow())
+            name, sha = rel.file_name, rel.sha256
+        return FileResponse(path, media_type="application/octet-stream", filename=name, headers={"Cache-Control": "no-store", "X-Content-SHA256": sha})
+    except service.ServiceError as exc:
+        with session_scope() as s:
+            service.record_refusal(s, "download.refused", exc.code, ip=ip)
+        return JSONResponse({"code": exc.code, "detail": exc.detail}, status_code=exc.http, headers={"Cache-Control": "no-store"})

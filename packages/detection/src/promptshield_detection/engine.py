@@ -52,8 +52,10 @@ def _default_decision(ids: set[str]) -> str:
 def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
             project_names: tuple[str, ...] = (), classifier: InjectionClassifier | None = None,
             taxonomy: dict[str, Category] | None = None, ner: NerDetector | None = None,
-            weights: Mapping[str, int] | None = None) -> Analysis:
-    """`weights`: peso (0 a 100) por categoria, definido pela empresa; o que faltar usa o peso padrão da taxonomia."""
+            weights: Mapping[str, int] | None = None, rule_pack: Any = None, pack_mode: str = "active") -> Analysis:
+    """`weights`: peso (0 a 100) por categoria, definido pela empresa; o que faltar usa o peso padrão da taxonomia.
+    `rule_pack`: pacote de regras (promptshield_detection.rulepack.RulePack). `pack_mode="active"`: as regras valem (categoria, risco, máscara);
+    `"shadow"`: só se registra quais regras casariam (`flags["pack"]`), sem nenhum efeito na análise: serve para ver o impacto antes de valer."""
     cats = taxonomy or load()
     ctx = context_from_event(event, allowed_hosts, project_names)
     findings: list[Finding] = []
@@ -68,6 +70,13 @@ def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
     findings += infra.detect(ctx)
     if ner is not None:
         findings += ner.detect(ctx)
+    pack_info: dict[str, Any] | None = None
+    if rule_pack is not None:
+        matches = rule_pack.scan(ctx.text)
+        if matches:
+            pack_info = {"version": rule_pack.version, "mode": "active" if pack_mode == "active" else "shadow", "hits": sorted({m.rule.id for m in matches})}
+            if pack_mode == "active":
+                findings += rule_pack.findings(matches)
     file_findings, attachments = files.detect(ctx.attachments)
     findings += file_findings    # sem posição no texto: contam como categoria e risco, não como trecho a mascarar
 
@@ -115,7 +124,7 @@ def analyze(event: Mapping[str, Any], *, allowed_hosts: tuple[str, ...] = (),
         categories=[{"id": c, "confidence": round(f.confidence, 2)}
                     for c, f in sorted(reported.items(), key=lambda kv: (-kv[1].confidence, kv[0]))],
         flags={"has_code": code.has_code(ctx.text), "has_sensitive": sensitive, "is_agent_action": is_agent,
-               "intents": detect_intents(ctx), "has_attachments": bool(attachments)},
+               "intents": detect_intents(ctx), "has_attachments": bool(attachments), **({"pack": pack_info} if pack_info else {})},
         risk={"score": sc, "reasons": [{"rule": r.rule, "contribution": r.contribution,
                                          **({"category": r.category} if r.category else {})} for r in reasons]},
         spans=spans,

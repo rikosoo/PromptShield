@@ -12,7 +12,8 @@ from pathlib import Path
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
-PACKAGE_PRODUCT = "promptshield-onprem"
+PACKAGE_PRODUCT = "promptshield-onprem"          # o pacote de instalação (aplicação)
+RULES_PRODUCT = "promptshield-rules"             # o pacote de regras de detecção (dados). Produto diferente = assinatura diferente: um nunca vale como o outro
 _DOMAIN = b"promptshield-package/v1|"
 
 
@@ -24,17 +25,17 @@ def sha256_file(path: str | Path) -> str:
     return h.hexdigest()
 
 
-def package_message(version: str, sha256: str) -> bytes:
-    return _DOMAIN + f"{PACKAGE_PRODUCT}|{version}|{sha256}".encode()
+def package_message(version: str, sha256: str, product: str = PACKAGE_PRODUCT) -> bytes:
+    return _DOMAIN + f"{product}|{version}|{sha256}".encode()
 
 
-def sign_package(key: Ed25519PrivateKey, version: str, sha256: str) -> str:
-    return base64.b64encode(key.sign(package_message(version, sha256))).decode()
+def sign_package(key: Ed25519PrivateKey, version: str, sha256: str, product: str = PACKAGE_PRODUCT) -> str:
+    return base64.b64encode(key.sign(package_message(version, sha256, product))).decode()
 
 
-def verify_package(pub: Ed25519PublicKey, version: str, sha256: str, signature_b64: str) -> bool:
+def verify_package(pub: Ed25519PublicKey, version: str, sha256: str, signature_b64: str, product: str = PACKAGE_PRODUCT) -> bool:
     try:
-        pub.verify(base64.b64decode(signature_b64, validate=True), package_message(version, sha256))
+        pub.verify(base64.b64decode(signature_b64, validate=True), package_message(version, sha256, product))
         return True
     except (InvalidSignature, ValueError):
         return False

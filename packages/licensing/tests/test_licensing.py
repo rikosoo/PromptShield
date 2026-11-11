@@ -274,3 +274,68 @@ def test_package_signature_binds_version_hash_and_product(vendor, tmp_path):
     assert not verify_package(pub, "0.4.1", digest, sig) and not verify_package(pub, "0.4.0", "0" * 64, sig)           # versão ou conteúdo trocado
     assert not verify_package(generate_signing_key().public_key(), "0.4.0", digest, sig)                              # outra chave
     assert not verify_package(pub, "0.4.0", digest, "não é base64!!") and not verify_package(pub, "0.4.0", digest, "")
+
+
+# ---------- versões e avisos de versão ----------
+def test_version_ordering_is_numeric_not_textual():
+    from promptshield_licensing import ReleaseError, is_newer, parse_version
+    order = ["0.3.0", "0.4.0-rc1", "0.4.0", "0.4.1", "0.10.0", "1.0.0", "2026.11.1", "2026.11.2", "2026.12.1"]
+    assert sorted(order, key=parse_version)[:6] == order[:6]
+    assert is_newer("0.10.0", "0.9.9") and not is_newer("0.9.9", "0.10.0")           # 10 > 9 (comparação de texto erraria)
+    assert is_newer("0.4.0", "0.4.0-rc1") and not is_newer("0.4.0-rc1", "0.4.0")
+    assert not is_newer("0.4.0", "0.4.0") and not is_newer("0.3.0", "0.4.0")        # igual ou MENOR nunca vale (sem voltar a versão com falha)
+    assert is_newer("0.4.0", None)
+    for bad in ("", "abc", "1", "1.2.3.4.5", "../1.0.0", "1.0.0; rm -rf", None, 5):
+        with pytest.raises(ReleaseError):
+            parse_version(bad)  # type: ignore[arg-type]
+
+
+def test_release_notice_is_signed_binds_the_package_and_rejects_forgeries(vendor):
+    from promptshield_licensing import ReleaseError, issue_notice, sign_package, verify_notice
+    sha = "a" * 64
+    sig = sign_package(vendor, "0.4.0", sha)
+    tok = issue_notice(vendor, kind="app", version="0.4.0", sha256=sha, size=1234, security=True, notes="Corrige X", published_at=T0, package_signature=sig, file="promptshield-onprem-0.4.0.zip")
+    n = verify_notice(tok, vendor.public_key())
+    assert (n.kind, n.version, n.sha256, n.size, n.security, n.notes, n.published_at) == ("app", "0.4.0", sha, 1234, True, "Corrige X", T0)
+    other = generate_signing_key()
+    with pytest.raises(ReleaseError):
+        verify_notice(tok, other.public_key())                                          # outra chave
+    forged = tok.split(".")
+    import base64
+    body = base64.urlsafe_b64decode(forged[1] + "==").replace(b'"security":true', b'"security":false')
+    with pytest.raises(ReleaseError):
+        verify_notice(".".join([forged[0], base64.urlsafe_b64encode(body).decode().rstrip("="), forged[2]]), vendor.public_key())    # mexer no aviso invalida
+    # o aviso é assinado, mas cita a assinatura de OUTRO pacote: recusado
+    bad = issue_notice(vendor, kind="app", version="0.4.0", sha256="b" * 64, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="x.zip")
+    with pytest.raises(ReleaseError, match="pacote"):
+        verify_notice(bad, vendor.public_key())
+    # separação de domínio: assinatura de pacote da APLICAÇÃO não vale como a de REGRAS
+    as_rules = issue_notice(vendor, kind="rules", version="0.4.0", sha256=sha, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="r.pack")
+    with pytest.raises(ReleaseError):
+        verify_notice(as_rules, vendor.public_key())
+    for kw in ({"kind": "tudo"}, {"sha256": "xyz"}, {"size": 0}, {"version": "lixo"}):
+        args = dict(kind="app", version="0.4.0", sha256=sha, size=1, security=False, notes="", published_at=T0, package_signature=sig, file="x.zip")
+        args.update(kw)
+        with pytest.raises(ReleaseError):
+            issue_notice(vendor, **args)
+    assert verify_notice(issue_notice(vendor, kind="app", version="0.4.0", sha256=sha, size=1, security=False, notes="n" * 5000, published_at=T0, package_signature=sig, file="x.zip"),
+                         vendor.public_key()).notes == "n" * 1000                       # notas limitadas
+
+
+def test_rulepack_envelope_is_signed_and_tampering_is_detected(vendor):
+    from promptshield_licensing import ReleaseError, sign_rulepack, verify_rulepack
+    payload = {"v": 1, "typ": "rulepack", "version": "2026.11.1", "rules": [{"id": "x-1", "pattern": "ç é"}]}
+    tok = sign_rulepack(vendor, payload)
+    assert tok.startswith("pk1.") and verify_rulepack(tok, vendor.public_key()) == payload          # acentos preservados
+    with pytest.raises(ReleaseError):
+        verify_rulepack(tok, generate_signing_key().public_key())
+    import base64
+    head, body, sig = tok.split(".")
+    forged = base64.urlsafe_b64encode(base64.urlsafe_b64decode(body + "==").replace(b"2026.11.1", b"2026.11.9")).decode().rstrip("=")
+    with pytest.raises(ReleaseError):
+        verify_rulepack(f"{head}.{forged}.{sig}", vendor.public_key())
+    for junk in ("", "lixo", "pk1.a.b", "pn1." + tok.split(".", 1)[1]):                           # outro prefixo (aviso) nunca vale como pacote de regras
+        with pytest.raises(ReleaseError):
+            verify_rulepack(junk, vendor.public_key())
+    with pytest.raises(ReleaseError):
+        sign_rulepack(vendor, {"x": "a" * (3 * 1024 * 1024)})
