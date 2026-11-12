@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     panel_cookie_secure: bool = True               # false só para teste local sem HTTPS
     panel_require_totp: bool = True                # exige o código de 6 dígitos no login (desligue só em desenvolvimento)
     panel_session_hours: int = 8
-    packages_dir: str = "/srv/packages"            # onde ficam os pacotes (.zip) que o painel entrega ao cliente
+    packages_dir: str = "/srv/pacotes"            # onde ficam os pacotes (.zip) que o painel entrega ao cliente
     trusted_proxy_hops: int = 0                    # quantos proxies de confiança há à frente deste serviço; 0 = ignora X-Forwarded-For (padrão seguro)
     login_max_failures: int = 5
     login_lock_minutes: int = 15

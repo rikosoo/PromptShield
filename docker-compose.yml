@@ -121,8 +121,8 @@ services:
       PANEL_SECRET: ${PANEL_SECRET:-}
       PANEL_COOKIE_SECURE: ${PANEL_COOKIE_SECURE:-true}
       PANEL_REQUIRE_TOTP: ${PANEL_REQUIRE_TOTP:-true}
-      PACKAGES_DIR: /srv/packages
-    volumes: ["${PACKAGES_HOST_DIR:-./dist/packages}:/srv/packages:ro"]      # pacotes (.zip) construídos com `make release`; o painel só lê
+      PACKAGES_DIR: /srv/pacotes                # NÃO use /srv/packages: é onde a imagem instala a biblioteca de licenças (o volume a esconderia)
+    volumes: ["${PACKAGES_HOST_DIR:-./dist/packages}:/srv/pacotes:ro"]      # pacotes (.zip) construídos com `make release`; o painel só lê
     ports: ["${LICENSING_BIND:-127.0.0.1}:${LICENSING_PORT:-8100}:8100"]
     depends_on:
       licensing-db:

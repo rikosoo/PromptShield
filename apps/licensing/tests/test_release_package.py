@@ -392,3 +392,15 @@ def test_rulepack_builder_refuses_invalid_rules_and_missing_key(tmp_path):
     assert not (tmp_path / "o").exists()                                                          # nenhum arquivo é gerado
     with pytest.raises(rb.BuildError, match="sem chave"):
         rb.build(ROOT / "infra" / "release" / "rulepacks" / "exemplo.json", "2026.11.1", tmp_path / "o2", signing_key="")
+
+
+def test_vendor_compose_volume_never_hides_the_libraries_installed_in_the_image():
+    """Regressão real: o volume dos pacotes em /srv/packages escondia a biblioteca instalada em /srv/packages/licensing e o serviço não subia (ModuleNotFoundError)."""
+    svc = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]["licensing"]
+    dockerfile = (ROOT / "apps" / "licensing" / "Dockerfile").read_text()
+    installed = [Path("/srv") / m.group(1) for m in re.finditer(r"COPY (\S+) \./", dockerfile)]                # onde a imagem coloca o código (/srv/packages/licensing, /srv/apps/licensing)
+    for vol in svc["volumes"]:
+        target = Path(vol.split(":")[-2])
+        for p in installed:
+            assert target != p and target not in p.parents and p not in target.parents, f"o volume {target} cobre {p}"
+    assert svc["environment"]["PACKAGES_DIR"] == str(Path(svc["volumes"][0].split(":")[-2]))               # o painel lê onde o volume está
